@@ -634,7 +634,7 @@
                 }
                 // Сбрасываем режим редактирования
                 isInEditMode = false;
-                currentProduct = null; // Опционально: чтобы не мешало дальнейшему сканированию
+                currentProduct = null;
             } else {
                 // Обычный режим — добавляем количество
                 addScannedItem(quantity);
@@ -792,9 +792,9 @@
                 output += `${item.barcode}g${item.quantity}\n`;
             });
 
-            // Можно заменить на фиксированный URL, например:
-            // const serverUrl = 'https://your-server.com/upload';
-            const serverUrl = prompt('Введите URL сервера для отправки данных:', 'http://localhost:8080');
+            // ВАЖНО: Укажите правильный IP вашего ПК!
+            const serverUrl = prompt('Введите URL прокси для отправки данных:', 'http://10.7.0.78:8080');
+            
             if (!serverUrl) {
                 debugLog('Отмена экспорта: URL не указан');
                 return;
@@ -807,13 +807,16 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'text/plain; charset=utf-8',
+                        'Accept': 'text/plain'
                     },
-                    body: output
+                    body: output,
+                    mode: 'cors' // Критически важно для GitHub Pages (HTTPS → HTTP)
                 });
 
                 if (response.ok) {
+                    const result = await response.text();
+                    debugLog(`Ответ от сервера: ${result}`);
                     showNotification('Данные успешно отправлены по сети!');
-                    debugLog('Данные успешно отправлены');
                 } else {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -821,7 +824,7 @@
             } catch (err) {
                 const errorMessage = err.message || 'Неизвестная ошибка сети';
                 debugLog('Ошибка сети: ' + errorMessage);
-                alert(`Ошибка отправки по сети:\n${errorMessage}`);
+                alert(`Ошибка отправки по сети:\n${errorMessage}\n\nПроверьте:\n1. Запущен ли прокси\n2. Доступен ли IP в сети\n3. Разрешен ли порт в брандмауэре`);
             }
         }
 
