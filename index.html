@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Barcode Harvester">
+    <meta name="theme-color" content="#4e73df">
+    <title>Инвентаризация - Barcode Harvester</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #4e73df;
+            --secondary-color: #6f42c1;
+            --success-color: #1cc88a;
+            --warning-color: #f6c23e;
+            --light-bg: #f8f9fc;
+            --dark-text: #333;
+        }
+        
+        body {
+            background-color: var(--light-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-bottom: 80px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .navbar {
+            background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            padding-top: 15px;
+            padding-bottom: 15px;
+        }
+        
+        .card {
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            margin-bottom: 16px;
+            border: none;
+            transition: transform 0.2s ease;
+        }
+        
+        .card:active {
+            transform: scale(0.98);
+        }
+        
+        .card-header {
+            background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            border-radius: 12px 12px 0 0 !important;
+            font-weight: 600;
+            padding: 15px 20px;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+        }
+        
+        .btn-success {
+            background-color: var(--success-color);
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+        }
+        
+        .btn-warning {
+            background-color: var(--warning-color);
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            color: #fff;
+        }
+        
+        .back-button {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 24px;
+            z-index: 1000;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+        }
+        
+        .nav-tabs .nav-link {
+            color: var(--primary-color);
+            font-weight: 500;
+            padding: 12px 15px;
+            font-size: 15px;
+        }
+        
+        .nav-tabs .nav-link.active {
+            color: var(--secondary-color);
+            font-weight: 600;
+            border-bottom: 3px solid var(--secondary-color);
+        }
+        
+        .product-item {
+            border-left: 4px solid var(--primary-color);
+            transition: all 0.2s ease;
+            margin-bottom: 12px;
+            border-radius: 8px;
+        }
+        
+        .product-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .scanned-count {
+            background-color: var(--secondary-color);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        
+        .debug-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            font-size: 12px;
+            z-index: 2000;
+            overflow: auto;
+            max-height: 100px;
+        }
+        
+        @media (max-width: 576px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .card {
+                margin-bottom: 12px;
+            }
+            
+            .card-header {
+                padding: 12px 15px;
+            }
+            
+            .btn {
+                padding: 12px 16px;
+                font-size: 16px;
+            }
+            
+            .form-control, .form-select {
+                font-size: 16px;
+            }
+        }
+        
+        /* Классы для управления видимостью */
+        .screen-hidden {
+            display: none !important;
+        }
+        
+        .screen-visible {
+            display: block !important;
+        }
+        
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background-color: var(--success-color);
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1050;
+            opacity: 0;
+            transform: translateY(100px);
+            transition: opacity 0.3s, transform 0.3s;
+            max-width: 90%;
+        }
+        
+        .notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* Стили для кнопок с иконками */
+        .btn i {
+            pointer-events: none;
+        }
+        
+        /* Оптимизация для сенсорных устройств */
+        .btn, .form-control, .form-select {
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .quantity-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Навигация -->
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1"><i class="fas fa-cubes me-2"></i>Инвентаризация</span>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Главный экран -->
+        <div id="main-screen" class="screen-visible">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Тип инвентаризации</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="radio" name="inventoryType" id="byLocation" value="location" checked>
+                        <label class="form-check-label" for="byLocation">
+                            По местам хранения
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="inventoryType" id="byNomenclature" value="nomenclature">
+                        <label class="form-check-label" for="byNomenclature">
+                            По номенклатуре
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Выбор склада</h5>
+                </div>
+                <div class="card-body">
+                    <select class="form-select" id="warehouseSelect">
+                        <option value="ТВЗ">Склад основного товара ТВЗ</option>
+                        <option value="Электромаркет">Склад Электромаркет</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2 mb-4">
+                <button class="btn btn-primary btn-lg" id="startInventory">
+                    <i class="fas fa-play-circle me-2"></i>Начать инвентаризацию
+                </button>
+            </div>
+        </div>
+
+        <!-- Экран сканирования -->
+        <div id="scan-screen" class="screen-hidden">
+            <ul class="nav nav-tabs mb-4" id="scanTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="scan-tab" data-bs-toggle="tab" data-bs-target="#scan" type="button" role="tab">
+                        <i class="fas fa-barcode me-1"></i>Сканирование
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="scanned-tab" data-bs-toggle="tab" data-bs-target="#scanned" type="button" role="tab">
+                        <i class="fas fa-list me-1"></i>Отсканировано
+                        <span class="scanned-count" id="scannedCount">0</span>
+                    </button>
+                </li>
+            </ul>
+            
+            <div class="tab-content" id="scanTabContent">
+                <!-- Вкладка сканирования -->
+                <div class="tab-pane fade show active" id="scan" role="tabpanel">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Сканирование товара</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="barcodeInput" class="form-label">Штрих-код товара</label>
+                                <input type="text" class="form-control" id="barcodeInput" placeholder="Введите штрих-код">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="quantityInput" class="form-label">Добавить количество (по умолчанию +1)</label>
+                                <div class="input-group">
+                                    <button class="btn btn-outline-secondary quantity-btn" type="button" id="decreaseQuantity">-</button>
+                                    <input type="number" class="form-control text-center" id="quantityInput" min="1" value="1">
+                                    <button class="btn btn-outline-secondary quantity-btn" type="button" id="increaseQuantity">+</button>
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-success w-100" id="addQuantity">
+                                <i class="fas fa-plus-circle me-2"></i>Добавить количество
+                            </button>
+                            
+                            <div id="product-info" class="mt-4 screen-hidden">
+                                <h5>Информация о товаре</h5>
+                                <div class="product-info-content p-3 bg-light rounded"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Вкладка отсканированного -->
+                <div class="tab-pane fade" id="scanned" role="tabpanel">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Отсканированные товары</h5>
+                            <div>
+                                <button class="btn btn-sm btn-success me-2" id="exportCSV">
+                                    <i class="fas fa-file-export me-1"></i>CSV
+                                </button>
+                                <button class="btn btn-sm btn-info" id="exportNetwork">
+                                    <i class="fas fa-cloud-upload-alt me-1"></i>Сеть
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="scanned-items-list">
+                                <p class="text-center text-muted mt-3">Нет отсканированных товаров</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn btn-danger back-button" id="back-button" title="Назад">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Панель отладки -->
+    <div class="debug-panel" id="debug-panel">
+        <strong>Отладка:</strong> <span id="debug-info">Готов к работе</span>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Инициализация данных
+        let scannedItems = [];
+        let currentProduct = null;
+        let selectedWarehouse = 'ТВЗ';
+        let isInEditMode = false; // <-- Флаг режима редактирования
+
+        // Демо-данные номенклатуры
+        const nomenclature = [
+            { id: 1, code: '100001', barcode: '4601234567890', name: 'Смартфон Samsung Galaxy S21', stock: { 'ТВЗ': 50, 'Электромаркет': 25 }, reserved: 5, location: 'Секция A-1' },
+            { id: 2, code: '100002', barcode: '4601234567891', name: 'Ноутбук Lenovo IdeaPad 5', stock: { 'ТВЗ': 30, 'Электромаркет': 15 }, reserved: 3, location: 'Секция B-2' },
+            { id: 3, code: '100003', barcode: '4601234567892', name: 'Наушники Sony WH-1000XM4', stock: { 'ТВЗ': 20, 'Электромаркет': 10 }, reserved: 2, location: 'Секция C-3' },
+            { id: 4, code: '100004', barcode: '4601234567893', name: 'Планшет Apple iPad Air', stock: { 'ТВЗ': 15, 'Электромаркет': 8 }, reserved: 1, location: 'Секция D-4' },
+            { id: 5, code: '100005', barcode: '4601234567894', name: 'Умные часы Apple Watch Series 7', stock: { 'ТВЗ': 25, 'Электромаркет': 12 }, reserved: 4, location: 'Секция E-5' }
+        ];
+
+        // Элементы DOM
+        const mainScreen = document.getElementById('main-screen');
+        const scanScreen = document.getElementById('scan-screen');
+        const barcodeInput = document.getElementById('barcodeInput');
+        const productInfo = document.getElementById('product-info');
+        const productInfoContent = document.querySelector('.product-info-content');
+        const scannedItemsList = document.getElementById('scanned-items-list');
+        const scannedCount = document.getElementById('scannedCount');
+        const warehouseSelect = document.getElementById('warehouseSelect');
+        const debugPanel = document.getElementById('debug-panel');
+        const debugInfo = document.getElementById('debug-info');
+        const quantityInput = document.getElementById('quantityInput');
+        const addQuantityBtn = document.getElementById('addQuantity');
+        const decreaseQuantityBtn = document.getElementById('decreaseQuantity');
+        const increaseQuantityBtn = document.getElementById('increaseQuantity');
+
+        // Функция для отладки
+        function debugLog(message) {
+            const timestamp = new Date().toISOString().slice(11, 23);
+            const fullMessage = `[${timestamp}] ${message}`;
+            debugInfo.textContent = fullMessage;
+            debugPanel.style.display = 'block';
+            console.log(fullMessage);
+        }
+
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', function() {
+            debugLog('Документ загружен, инициализация приложения');
+            
+            // Загрузка сохраненных данных
+            loadSavedData();
+            
+            // Обработчики событий
+            document.getElementById('startInventory').addEventListener('click', startInventory);
+            document.getElementById('back-button').addEventListener('click', backToMain);
+            document.getElementById('addQuantity').addEventListener('click', addQuantity);
+            document.getElementById('exportCSV').addEventListener('click', exportToCSV);
+            document.getElementById('exportNetwork').addEventListener('click', exportViaNetwork);
+            
+            // Обработчики для поля штрих-кода
+            barcodeInput.addEventListener('change', processBarcode);
+            barcodeInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    processBarcode();
+                }
+            });
+            
+            // Обработчики для управления количеством
+            decreaseQuantityBtn.addEventListener('click', function() {
+                const currentValue = parseInt(quantityInput.value) || 1;
+                if (currentValue > 1) {
+                    quantityInput.value = currentValue - 1;
+                }
+            });
+            
+            increaseQuantityBtn.addEventListener('click', function() {
+                const currentValue = parseInt(quantityInput.value) || 1;
+                quantityInput.value = currentValue + 1;
+            });
+            
+            quantityInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    addQuantity();
+                }
+            });
+            
+            debugLog('Инициализация завершена');
+        });
+
+        // Функции
+        function loadSavedData() {
+            try {
+                const savedData = localStorage.getItem('scannedItems');
+                const savedWarehouse = localStorage.getItem('selectedWarehouse');
+                
+                if (savedData) {
+                    scannedItems = JSON.parse(savedData);
+                    updateScannedList();
+                }
+                
+                if (savedWarehouse) {
+                    warehouseSelect.value = savedWarehouse;
+                }
+                debugLog('Данные загружены из localStorage');
+            } catch (e) {
+                debugLog('Ошибка при загрузке данных: ' + e.message);
+            }
+        }
+
+        function startInventory() {
+            debugLog('Нажата кнопка "Начать инвентаризацию"');
+            
+            // Сохранение выбранного склада
+            selectedWarehouse = warehouseSelect.value;
+            localStorage.setItem('selectedWarehouse', selectedWarehouse);
+            
+            // Переключение экранов
+            mainScreen.classList.remove('screen-visible');
+            mainScreen.classList.add('screen-hidden');
+            
+            scanScreen.classList.remove('screen-hidden');
+            scanScreen.classList.add('screen-visible');
+            
+            debugLog('Переключение экранов: главный -> сканирование');
+            
+            // Фокус на поле ввода штрих-кода
+            barcodeInput.focus();
+        }
+
+        function backToMain() {
+            debugLog('Нажата кнопка "Назад"');
+            
+            // Переключение экранов
+            scanScreen.classList.remove('screen-visible');
+            scanScreen.classList.add('screen-hidden');
+            
+            mainScreen.classList.remove('screen-hidden');
+            mainScreen.classList.add('screen-visible');
+            
+            debugLog('Переключение экранов: сканирование -> главный');
+        }
+
+        function processBarcode() {
+            // Сбрасываем режим редактирования при новом сканировании
+            isInEditMode = false;
+            
+            const barcode = barcodeInput.value.trim();
+            if (!barcode) return;
+            
+            debugLog('Обработка штрих-кода: ' + barcode);
+            
+            // Поиск товара в номенклатуре
+            const product = findProductByBarcode(barcode);
+            
+            if (product) {
+                displayProductInfo(product);
+                currentProduct = product;
+                // Автоматически добавляем товар с количеством 1
+                addScannedItem(1);
+            } else {
+                // Создаем новый товар, если не найден в базе
+                currentProduct = {
+                    id: Date.now(),
+                    barcode: barcode,
+                    code: 'Новый',
+                    name: 'Неизвестный товар',
+                    stock: { 'ТВЗ': 0, 'Электромаркет': 0 },
+                    reserved: 0,
+                    location: 'Не указано',
+                    quantity: 0
+                };
+                displayProductInfo(currentProduct);
+                // Автоматически добавляем товар с количеством 1
+                addScannedItem(1);
+            }
+            
+            barcodeInput.value = '';
+            // Фокус остается на поле ввода штрих-кода для следующего сканирования
+            barcodeInput.focus();
+        }
+
+        function findProductByBarcode(barcode) {
+            return nomenclature.find(item => item.barcode === barcode);
+        }
+
+        function displayProductInfo(product) {
+            const quantity = getCurrentQuantity(product);
+            
+            productInfoContent.innerHTML = `
+                <p><strong>Код:</strong> ${product.code}</p>
+                <p><strong>Наименование:</strong> ${product.name}</p>
+                <p><strong>Штрих-код:</strong> ${product.barcode}</p>
+                <p><strong>Остаток на складе (${selectedWarehouse}):</strong> ${product.stock[selectedWarehouse]}</p>
+                <p><strong>Забронировано:</strong> ${product.reserved}</p>
+                <p><strong>Место хранения:</strong> ${product.location}</p>
+                <p><strong>Текущее количество:</strong> ${quantity}</p>
+            `;
+            
+            productInfo.classList.remove('screen-hidden');
+            productInfo.classList.add('screen-visible');
+            
+            debugLog('Отображение информации о товаре: ' + product.name);
+        }
+
+        function getCurrentQuantity(product) {
+            const existingItem = scannedItems.find(item => item.barcode === product.barcode);
+            return existingItem ? existingItem.quantity : 0;
+        }
+
+        function addScannedItem(quantity) {
+            if (!currentProduct) {
+                alert('Сначала отсканируйте товар');
+                return;
+            }
+            
+            debugLog('Добавление количества: ' + quantity + ' для товара ' + currentProduct.name);
+            
+            // Проверяем, есть ли уже такой товар в отсканированных
+            const existingIndex = scannedItems.findIndex(item => item.barcode === currentProduct.barcode);
+            
+            if (existingIndex !== -1) {
+                // Добавляем количество к существующей записи
+                scannedItems[existingIndex].quantity += quantity;
+            } else {
+                // Добавляем новую запись
+                scannedItems.push({
+                    id: currentProduct.id,
+                    code: currentProduct.code,
+                    barcode: currentProduct.barcode,
+                    name: currentProduct.name,
+                    quantity: quantity,
+                    warehouse: selectedWarehouse,
+                    location: currentProduct.location
+                });
+            }
+            
+            // Сохранение данных
+            localStorage.setItem('scannedItems', JSON.stringify(scannedItems));
+            
+            // Обновление отображения
+            updateScannedList();
+            displayProductInfo(currentProduct);
+            
+            // Показать уведомление
+            showNotification(`Добавлено ${quantity} единиц товара "${currentProduct.name}"`);
+        }
+
+        function addQuantity() {
+            if (!currentProduct) {
+                alert('Сначала отсканируйте товар');
+                barcodeInput.focus();
+                return;
+            }
+            
+            const quantity = parseInt(quantityInput.value) || 1;
+            if (quantity <= 0) {
+                alert('Количество должно быть положительным числом');
+                quantityInput.focus();
+                quantityInput.select();
+                return;
+            }
+            
+            if (isInEditMode) {
+                // Режим редактирования — заменяем количество
+                const existingIndex = scannedItems.findIndex(item => item.barcode === currentProduct.barcode);
+                if (existingIndex !== -1) {
+                    scannedItems[existingIndex].quantity = quantity;
+                    localStorage.setItem('scannedItems', JSON.stringify(scannedItems));
+                    updateScannedList();
+                    displayProductInfo(currentProduct);
+                    showNotification(`Количество товара "${currentProduct.name}" изменено на ${quantity}`);
+                    debugLog(`Товар отредактирован: ${currentProduct.name} → ${quantity}`);
+                }
+                // Сбрасываем режим редактирования
+                isInEditMode = false;
+                currentProduct = null; // Опционально: чтобы не мешало дальнейшему сканированию
+            } else {
+                // Обычный режим — добавляем количество
+                addScannedItem(quantity);
+            }
+            
+            // Сброс поля количества
+            quantityInput.value = '1';
+            // Фокус на поле штрих-кода
+            barcodeInput.focus();
+        }
+
+        function updateScannedList() {
+            if (scannedItems.length === 0) {
+                scannedItemsList.innerHTML = '<p class="text-center text-muted mt-3">Нет отсканированных товаров</p>';
+                scannedCount.textContent = '0';
+                return;
+            }
+            
+            scannedCount.textContent = scannedItems.length;
+            
+            let html = '';
+            scannedItems.forEach(item => {
+                html += `
+                    <div class="product-item bg-white p-3 mb-3 rounded">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">${item.name}</h6>
+                                <p class="mb-1 text-muted">Код: ${item.code} | Штрих-код: ${item.barcode}</p>
+                                <p class="mb-1">Количество: <strong>${item.quantity}</strong></p>
+                                <p class="mb-0">Склад: ${item.warehouse} | Расположение: ${item.location}</p>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-outline-warning edit-item me-2" data-id="${item.barcode}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger delete-item" data-id="${item.barcode}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            scannedItemsList.innerHTML = html;
+            
+            // Добавляем обработчики для кнопок удаления
+            document.querySelectorAll('.delete-item').forEach(button => {
+                button.addEventListener('click', function() {
+                    const barcode = this.getAttribute('data-id');
+                    deleteItem(barcode);
+                });
+            });
+            
+            // Добавляем обработчики для кнопок редактирования
+            document.querySelectorAll('.edit-item').forEach(button => {
+                button.addEventListener('click', function() {
+                    const barcode = this.getAttribute('data-id');
+                    editItem(barcode);
+                });
+            });
+            
+            debugLog('Список отсканированных товаров обновлен: ' + scannedItems.length + ' позиций');
+        }
+
+        function deleteItem(barcode) {
+            scannedItems = scannedItems.filter(item => item.barcode !== barcode);
+            localStorage.setItem('scannedItems', JSON.stringify(scannedItems));
+            updateScannedList();
+            
+            if (currentProduct && currentProduct.barcode === barcode) {
+                productInfo.classList.remove('screen-visible');
+                productInfo.classList.add('screen-hidden');
+                currentProduct = null;
+            }
+            
+            showNotification('Товар удален из списка');
+            debugLog('Товар удален: ' + barcode);
+        }
+
+        function editItem(barcode) {
+            const item = scannedItems.find(item => item.barcode === barcode);
+            if (!item) return;
+            
+            // Находим товар в номенклатуре или используем данные из отсканированных
+            const product = findProductByBarcode(barcode) || item;
+            
+            // Устанавливаем как текущий товар
+            currentProduct = product;
+            displayProductInfo(product);
+            
+            // Устанавливаем текущее количество
+            quantityInput.value = item.quantity;
+            
+            // Включаем режим редактирования
+            isInEditMode = true;
+            
+            // Переключаемся на вкладку сканирования
+            document.getElementById('scan-tab').click();
+            
+            // Фокус на поле количества
+            quantityInput.focus();
+            quantityInput.select();
+            
+            showNotification('Редактирование товара: ' + product.name);
+            debugLog('Редактирование товара: ' + barcode);
+        }
+
+        function exportToCSV() {
+            if (scannedItems.length === 0) {
+                alert('Нет данных для экспорта');
+                return;
+            }
+            
+            debugLog('Экспорт данных в CSV');
+            
+            // Добавляем BOM для правильного отображения кириллицы в Excel
+            const BOM = "\uFEFF";
+            
+            // Создание CSV содержимого с правильным разделителем
+            let csvContent = BOM + "Код;Наименование;Количество;Штрих-код;Склад;Расположение\n";
+            
+            scannedItems.forEach(item => {
+                csvContent += `${item.code};"${item.name}";${item.quantity};${item.barcode};${item.warehouse};${item.location}\n`;
+            });
+            
+            // Создание и скачивание файла
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const date = new Date().toISOString().slice(0, 10);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `инвентаризация_${date}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showNotification('Данные экспортированы в CSV');
+        }
+
+        async function exportViaNetwork() {
+            if (scannedItems.length === 0) {
+                alert('Нет данных для экспорта');
+                return;
+            }
+
+            debugLog('Подготовка данных для экспорта по сети...');
+
+            // Формируем данные в формате: <штрихкод>g<количество>\n
+            let output = '';
+            scannedItems.forEach(item => {
+                output += `${item.barcode}g${item.quantity}\n`;
+            });
+
+            // Можно заменить на фиксированный URL, например:
+            // const serverUrl = 'https://your-server.com/upload';
+            const serverUrl = prompt('Введите URL сервера для отправки данных:', 'http://localhost:8080');
+            if (!serverUrl) {
+                debugLog('Отмена экспорта: URL не указан');
+                return;
+            }
+
+            try {
+                debugLog(`Отправка данных на: ${serverUrl}`);
+
+                const response = await fetch(serverUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain; charset=utf-8',
+                    },
+                    body: output
+                });
+
+                if (response.ok) {
+                    showNotification('Данные успешно отправлены по сети!');
+                    debugLog('Данные успешно отправлены');
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+            } catch (err) {
+                const errorMessage = err.message || 'Неизвестная ошибка сети';
+                debugLog('Ошибка сети: ' + errorMessage);
+                alert(`Ошибка отправки по сети:\n${errorMessage}`);
+            }
+        }
+
+        function showNotification(message) {
+            // Создаем элемент уведомления
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            // Показываем уведомление
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+            
+            // Удаляем уведомление через 3 секунды
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 3000);
+            
+            debugLog('Показано уведомление: ' + message);
+        }
+    </script>
+</body>
+</html>
