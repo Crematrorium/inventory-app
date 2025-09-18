@@ -510,9 +510,6 @@
                 }
             });
             
-            // Попытка подключения к WebSocket-серверу
-            connectWebSocket();
-            
             debugLog('Инициализация завершена');
         });
 
@@ -566,7 +563,6 @@
             }
             
             // Попробовать подключиться
-            wsReconnectAttempts = 0;
             connectWebSocket();
         }
 
@@ -601,14 +597,6 @@
                 
                 ws.onmessage = function(event) {
                     debugLog('Получено сообщение от сервера: ' + event.data);
-                    try {
-                        const data = JSON.parse(event.data);
-                        if (data.type === 'connected') {
-                            showNotification('Соединение с сервером установлено');
-                        }
-                    } catch (e) {
-                        // Не JSON сообщение, игнорируем
-                    }
                 };
                 
                 ws.onerror = function(error) {
@@ -699,8 +687,6 @@
             if (product) {
                 displayProductInfo(product);
                 currentProduct = product;
-                // Автоматически добавляем товар с количеством 1
-                addScannedItem(1);
             } else {
                 // Создаем новый товар, если не найден в базе
                 currentProduct = {
@@ -714,8 +700,6 @@
                     quantity: 0
                 };
                 displayProductInfo(currentProduct);
-                // Автоматически добавляем товар с количеством 1
-                addScannedItem(1);
             }
             
             barcodeInput.value = '';
@@ -966,7 +950,8 @@
                 const reconnect = confirm('Нет подключения к серверу. Попробовать переподключиться?');
                 if (reconnect) {
                     connectWebSocket();
-                    return;
+                    // Ждем немного перед повторной попыткой
+                    setTimeout(exportViaWebSocket, 1000);
                 }
                 debugLog('Попытка экспорта без активного WebSocket-соединения');
                 return;
@@ -979,18 +964,19 @@
 
             debugLog('Подготовка данных для экспорта через WebSocket...');
 
-            // Формируем данные в формате: <штрихкод>g<количество>\n
-            let output = '';
-            scannedItems.forEach(item => {
-                output += `${item.barcode}g${item.quantity}\n`;
-            });
-
             try {
-                debugLog(`Отправка данных через WebSocket`);
+                // Отправляем данные по одному товару за раз с задержкой
+                for (const item of scannedItems) {
+                    const data = `${item.barcode}g${item.quantity}\n`;
+                    debugLog(`Отправка: ${data}`);
+                    
+                    ws.send(data);
+                    
+                    // Ждем немного перед отправкой следующего товара
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
                 
-                ws.send(output);
-                debugLog('Данные отправлены через WebSocket');
-                
+                debugLog('Все данные отправлены через WebSocket');
                 showNotification('Данные успешно отправлены через WebSocket!');
             } catch (err) {
                 const errorMessage = err.message || 'Неизвестная ошибка сети';
