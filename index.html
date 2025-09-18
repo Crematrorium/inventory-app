@@ -247,6 +247,11 @@
             background-color: #e74a3b;
             color: white;
         }
+        
+        .connecting {
+            background-color: #f6c23e;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -349,7 +354,7 @@
                         <div class="card-body">
                             <div class="mb-3">
                                 <label for="barcodeInput" class="form-label">Штрих-код товара</label>
-                                <input type="text" class="form-control" id="barcodeInput" placeholder="Введите штрих-код">
+                                <input type="text" class="form-control" id="barcodeInput" placeholder="Введите штрих-код" autocomplete="off">
                             </div>
                             
                             <div class="mb-3">
@@ -458,12 +463,14 @@
         }
 
         // Обновление статуса подключения
-        function updateConnectionStatus(isConnected) {
-            if (isConnected) {
-                connectionStatus.className = 'connection-status connected';
+        function updateConnectionStatus(status) {
+            connectionStatus.className = `connection-status ${status}`;
+            
+            if (status === 'connected') {
                 connectionStatus.innerHTML = '<i class="fas fa-plug me-1"></i>Подключено';
+            } else if (status === 'connecting') {
+                connectionStatus.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Подключение...';
             } else {
-                connectionStatus.className = 'connection-status disconnected';
                 connectionStatus.innerHTML = '<i class="fas fa-plug me-1"></i>Нет подключения';
             }
         }
@@ -510,6 +517,12 @@
                 }
             });
             
+            // Автоматическое подключение при загрузке, если есть сохраненные настройки
+            const savedServerIp = localStorage.getItem('serverIp');
+            if (savedServerIp) {
+                setTimeout(connectWebSocket, 1000);
+            }
+            
             debugLog('Инициализация завершена');
         });
 
@@ -528,6 +541,7 @@
                 
                 if (savedWarehouse) {
                     warehouseSelect.value = savedWarehouse;
+                    selectedWarehouse = savedWarehouse;
                 }
                 
                 if (savedServerIp) {
@@ -583,16 +597,16 @@
             
             const wsUrl = `ws://${serverIp}:${serverPort}`;
             debugLog(`Попытка подключения к WebSocket: ${wsUrl}`);
+            updateConnectionStatus('connecting');
             
             try {
                 ws = new WebSocket(wsUrl);
-                updateConnectionStatus(false);
                 
                 ws.onopen = function() {
                     wsReconnectAttempts = 0;
                     debugLog('WebSocket соединение установлено');
                     showNotification('Подключено к серверу');
-                    updateConnectionStatus(true);
+                    updateConnectionStatus('connected');
                 };
                 
                 ws.onmessage = function(event) {
@@ -602,24 +616,12 @@
                 ws.onerror = function(error) {
                     debugLog('Ошибка WebSocket: ' + JSON.stringify(error));
                     showNotification('Ошибка подключения к серверу');
-                    updateConnectionStatus(false);
-                    
-                    // Предложить пользователю ввести новый IP
-                    setTimeout(() => {
-                        const newIp = prompt('Не удалось подключиться к серверу. Введите новый IP-адрес:',
-                                            localStorage.getItem('serverIp') || '10.7.0.78');
-                        if (newIp) {
-                            localStorage.setItem('serverIp', newIp);
-                            serverIpInput.value = newIp;
-                            wsReconnectAttempts = 0;
-                            connectWebSocket();
-                        }
-                    }, 1000);
+                    updateConnectionStatus('disconnected');
                 };
                 
                 ws.onclose = function(event) {
                     debugLog(`WebSocket закрыт. Код: ${event.code}, причина: ${event.reason}`);
-                    updateConnectionStatus(false);
+                    updateConnectionStatus('disconnected');
                     
                     if (wsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                         const delay = RECONNECT_DELAYS[wsReconnectAttempts] || 5000;
@@ -635,7 +637,7 @@
             } catch (e) {
                 debugLog('Ошибка инициализации WebSocket: ' + e.message);
                 showNotification('Ошибка подключения к серверу');
-                updateConnectionStatus(false);
+                updateConnectionStatus('disconnected');
             }
         }
 
@@ -687,6 +689,8 @@
             if (product) {
                 displayProductInfo(product);
                 currentProduct = product;
+                // Автоматически добавляем товар с количеством 1
+                addScannedItem(1);
             } else {
                 // Создаем новый товар, если не найден в базе
                 currentProduct = {
@@ -700,6 +704,8 @@
                     quantity: 0
                 };
                 displayProductInfo(currentProduct);
+                // Автоматически добавляем товар с количеством 1
+                addScannedItem(1);
             }
             
             barcodeInput.value = '';
