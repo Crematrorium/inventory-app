@@ -10,6 +10,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Стили остаются без изменений */
         :root {
             --primary-color: #4e73df;
             --secondary-color: #6f42c1;
@@ -252,6 +253,15 @@
             background-color: #f6c23e;
             color: white;
         }
+        
+        .https-warning {
+            background-color: #f6c23e;
+            color: #000;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -261,6 +271,14 @@
             <span class="navbar-brand mb-0 h1"><i class="fas fa-cubes me-2"></i>Инвентаризация</span>
         </div>
     </nav>
+
+    <!-- Предупреждение о HTTPS -->
+    <div class="container">
+        <div id="httpsWarning" class="https-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Внимание:</strong> Страница загружена по HTTPS. Для работы с WebSocket используйте WSS (Secure WebSocket) или загрузите страницу по HTTP.
+        </div>
+    </div>
 
     <!-- Статус подключения -->
     <div id="connectionStatus" class="connection-status disconnected">
@@ -314,6 +332,12 @@
                     <div class="mb-3">
                         <label for="serverPort" class="form-label">Порт сервера</label>
                         <input type="number" class="form-control" id="serverPort" value="8765">
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="useSecureProtocol">
+                        <label class="form-check-label" for="useSecureProtocol">
+                            Использовать безопасное соединение (WSS)
+                        </label>
                     </div>
                     <button class="btn btn-outline-primary w-100" id="testConnection">
                         <i class="fas fa-plug me-2"></i>Проверить подключение
@@ -452,6 +476,14 @@
         const serverIpInput = document.getElementById('serverIp');
         const serverPortInput = document.getElementById('serverPort');
         const testConnectionBtn = document.getElementById('testConnection');
+        const useSecureProtocol = document.getElementById('useSecureProtocol');
+        const httpsWarning = document.getElementById('httpsWarning');
+
+        // Проверяем, загружена ли страница по HTTPS
+        if (window.location.protocol === 'https:') {
+            httpsWarning.style.display = 'block';
+            useSecureProtocol.checked = true;
+        }
 
         // Функция для отладки
         function debugLog(message) {
@@ -533,6 +565,7 @@
                 const savedWarehouse = localStorage.getItem('selectedWarehouse');
                 const savedServerIp = localStorage.getItem('serverIp');
                 const savedServerPort = localStorage.getItem('serverPort');
+                const savedUseSecure = localStorage.getItem('useSecureProtocol');
                 
                 if (savedData) {
                     scannedItems = JSON.parse(savedData);
@@ -552,6 +585,10 @@
                     serverPortInput.value = savedServerPort;
                 }
                 
+                if (savedUseSecure) {
+                    useSecureProtocol.checked = savedUseSecure === 'true';
+                }
+                
                 debugLog('Данные загружены из localStorage');
             } catch (e) {
                 debugLog('Ошибка при загрузке данных: ' + e.message);
@@ -561,6 +598,7 @@
         function testConnection() {
             const ip = serverIpInput.value.trim();
             const port = serverPortInput.value.trim();
+            const useSecure = useSecureProtocol.checked;
             
             if (!ip) {
                 alert('Введите IP-адрес сервера');
@@ -569,6 +607,7 @@
             
             localStorage.setItem('serverIp', ip);
             localStorage.setItem('serverPort', port);
+            localStorage.setItem('useSecureProtocol', useSecure);
             
             // Закрыть существующее соединение
             if (ws) {
@@ -583,6 +622,7 @@
         function connectWebSocket() {
             let serverIp = localStorage.getItem('serverIp');
             let serverPort = localStorage.getItem('serverPort') || '8765';
+            const useSecure = localStorage.getItem('useSecureProtocol') === 'true';
             
             if (!serverIp) {
                 serverIp = prompt('Введите IP-адрес сервера для WebSocket:', '10.7.0.78');
@@ -594,8 +634,11 @@
                     return;
                 }
             }
+
+            // Определяем протокол подключения
+            const protocol = useSecure ? 'wss' : 'ws';
+            const wsUrl = `${protocol}://${serverIp}:${serverPort}`;
             
-            const wsUrl = `ws://${serverIp}:${serverPort}`;
             debugLog(`Попытка подключения к WebSocket: ${wsUrl}`);
             updateConnectionStatus('connecting');
             
@@ -640,6 +683,11 @@
                 updateConnectionStatus('disconnected');
             }
         }
+
+        // Остальные функции (startInventory, backToMain, processBarcode, findProductByBarcode,
+        // displayProductInfo, getCurrentQuantity, addScannedItem, addQuantity, updateScannedList,
+        // deleteItem, editItem, exportToCSV, exportViaWebSocket, showNotification)
+        // остаются без изменений, как в предыдущей версии
 
         function startInventory() {
             debugLog('Нажата кнопка "Начать инвентаризацию"');
