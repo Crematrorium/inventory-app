@@ -1,1067 +1,769 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Barcode Harvester">
-    <meta name="theme-color" content="#4e73df">
-    <title>Инвентаризация - Barcode Harvester</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        /* Стили остаются без изменений */
-        :root {
-            --primary-color: #4e73df;
-            --secondary-color: #6f42c1;
-            --success-color: #1cc88a;
-            --warning-color: #f6c23e;
-            --light-bg: #f8f9fc;
-            --dark-text: #333;
+import React, { useState, useEffect, useRef } from 'react';
+
+const App = () => {
+  // Состояния приложения
+  const [currentScreen, setCurrentScreen] = useState('main');
+  const [inventoryType, setInventoryType] = useState('location');
+  const [selectedWarehouse, setSelectedWarehouse] = useState('ТВЗ');
+  const [serverIp, setServerIp] = useState('10.7.0.78');
+  const [serverPort, setServerPort] = useState('8765');
+  const [useSecureProtocol, setUseSecureProtocol] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [scannedItems, setScannedItems] = useState([]);
+  const [currentProduct, setCurrentProduct] = useState(null);
+  const [quantity, setQuantity] = useState(1);
+  const [isInEditMode, setIsInEditMode] = useState(false);
+  const [activeTab, setActiveTab] = useState('scan');
+  const [showHttpsWarning, setShowHttpsWarning] = useState(false);
+  const [compatibilityResults, setCompatibilityResults] = useState([]);
+  const [debugMessage, setDebugMessage] = useState('Готов к работе');
+
+  // Рефы для DOM элементов
+  const barcodeInputRef = useRef(null);
+  const wsRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
+  const MAX_RECONNECT_ATTEMPTS = 10;
+  const RECONNECT_DELAYS = [1000, 2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000];
+
+  // Демо-данные номенклатуры
+  const nomenclature = [
+    { id: 1, code: '100001', barcode: '4601234567890', name: 'Смартфон Samsung Galaxy S21', stock: { 'ТВЗ': 50, 'Электромаркет': 25 }, reserved: 5, location: 'Секция A-1' },
+    { id: 2, code: '100002', barcode: '4601234567891', name: 'Ноутбук Lenovo IdeaPad 5', stock: { 'ТВЗ': 30, 'Электромаркет': 15 }, reserved: 3, location: 'Секция B-2' },
+    { id: 3, code: '100003', barcode: '4601234567892', name: 'Наушники Sony WH-1000XM4', stock: { 'ТВЗ': 20, 'Электромаркет': 10 }, reserved: 2, location: 'Секция C-3' },
+    { id: 4, code: '100004', barcode: '4601234567893', name: 'Планшет Apple iPad Air', stock: { 'ТВЗ': 15, 'Электромаркет': 8 }, reserved: 1, location: 'Секция D-4' },
+    { id: 5, code: '100005', barcode: '4601234567894', name: 'Умные часы Apple Watch Series 7', stock: { 'ТВЗ': 25, 'Электромаркет': 12 }, reserved: 4, location: 'Секция E-5' }
+  ];
+
+  // Функция для отладки
+  const debugLog = (message) => {
+    const timestamp = new Date().toISOString().slice(11, 23);
+    const fullMessage = `[${timestamp}] ${message}`;
+    setDebugMessage(fullMessage);
+    console.log(fullMessage);
+  };
+
+  // Обновление статуса подключения
+  const updateConnectionStatus = (status) => {
+    setConnectionStatus(status);
+  };
+
+  // Подключение к WebSocket
+  const connectWebSocket = () => {
+    if (!serverIp) {
+      debugLog('Отмена подключения: IP не указан');
+      return;
+    }
+
+    const protocol = useSecureProtocol ? 'wss' : 'ws';
+    const wsUrl = `${protocol}://${serverIp}:${serverPort}`;
+    debugLog(`Попытка подключения к WebSocket: ${wsUrl}`);
+    updateConnectionStatus('connecting');
+
+    try {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        reconnectAttemptsRef.current = 0;
+        debugLog('WebSocket соединение установлено');
+        showNotification('Подключено к серверу');
+        updateConnectionStatus('connected');
+      };
+
+      ws.onmessage = (event) => {
+        debugLog(`Получено сообщение от сервера: ${event.data}`);
+      };
+
+      ws.onerror = (error) => {
+        debugLog(`Ошибка WebSocket: ${error.message}`);
+        showNotification('Ошибка подключения к серверу');
+        updateConnectionStatus('disconnected');
+      };
+
+      ws.onclose = (event) => {
+        debugLog(`WebSocket закрыт. Код: ${event.code}, причина: ${event.reason}`);
+        updateConnectionStatus('disconnected');
+        if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          const delay = RECONNECT_DELAYS[reconnectAttemptsRef.current] || 5000;
+          reconnectAttemptsRef.current++;
+          debugLog(`Попытка переподключения (${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS}) через ${delay}ms`);
+          setTimeout(connectWebSocket, delay);
+        } else {
+          debugLog('Достигнуто максимальное количество попыток переподключения');
+          showNotification('Не удалось подключиться к серверу');
         }
+      };
+    } catch (e) {
+      debugLog(`Ошибка инициализации WebSocket: ${e.message}`);
+      showNotification('Ошибка подключения к серверу');
+      updateConnectionStatus('disconnected');
+    }
+  };
+
+  // Тестирование подключения
+  const testConnection = () => {
+    if (!serverIp) {
+      alert('Введите IP-адрес сервера');
+      return;
+    }
+
+    // Закрыть существующее соединение
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    // Попробовать подключиться
+    connectWebSocket();
+  };
+
+  // Проверка совместимости
+  const testCompatibility = () => {
+    const results = [];
+    
+    if (window.WebSocket) {
+      results.push('WebSocket: поддерживается');
+    } else {
+      results.push('WebSocket: НЕ поддерживается');
+    }
+    
+    if (typeof Array.prototype.find === 'function') {
+      results.push('Array.find(): поддерживается');
+    } else {
+      results.push('Array.find(): НЕ поддерживается');
+    }
+    
+    if (typeof document.body.style.flex !== 'undefined') {
+      results.push('Flexbox: поддерживается');
+    } else {
+      results.push('Flexbox: НЕ поддерживается');
+    }
+    
+    if (window.Promise) {
+      results.push('Promise: поддерживается');
+    } else {
+      results.push('Promise: НЕ поддерживается');
+    }
+
+    setCompatibilityResults(results);
+    debugLog(`Проверка совместимости завершена: ${results.length} тестов`);
+  };
+
+  // Начало инвентаризации
+  const startInventory = () => {
+    debugLog('Нажата кнопка "Начать инвентаризацию"');
+    setCurrentScreen('scan');
+    setTimeout(() => {
+      if (barcodeInputRef.current) {
+        barcodeInputRef.current.focus();
+      }
+    }, 100);
+  };
+
+  // Возврат на главный экран
+  const backToMain = () => {
+    debugLog('Нажата кнопка "Назад"');
+    setCurrentScreen('main');
+  };
+
+  // Обработка штрих-кода
+  const processBarcode = (barcode) => {
+    setIsInEditMode(false);
+    if (!barcode) return;
+    debugLog(`Обработка штрих-кода: ${barcode}`);
+
+    const product = nomenclature.find(p => p.barcode === barcode);
+    if (product) {
+      setCurrentProduct(product);
+      addScannedItem(1);
+    } else {
+      const newProduct = {
+        id: Date.now(),
+        barcode: barcode,
+        code: 'Новый',
+        name: 'Неизвестный товар',
+        stock: { 'ТВЗ': 0, 'Электромаркет': 0 },
+        reserved: 0,
+        location: 'Не указано',
+        quantity: 0
+      };
+      setCurrentProduct(newProduct);
+      addScannedItem(1);
+    }
+  };
+
+  // Добавление товара в список
+  const addScannedItem = (qty) => {
+    if (!currentProduct) {
+      alert('Сначала отсканируйте товар');
+      return;
+    }
+
+    debugLog(`Добавление количества: ${qty} для товара ${currentProduct.name}`);
+
+    const existingIndex = scannedItems.findIndex(item => item.barcode === currentProduct.barcode);
+    let updatedItems = [...scannedItems];
+
+    if (existingIndex !== -1) {
+      updatedItems[existingIndex] = {
+        ...updatedItems[existingIndex],
+        quantity: updatedItems[existingIndex].quantity + qty
+      };
+    } else {
+      updatedItems.push({
+        id: currentProduct.id,
+        code: currentProduct.code,
+        barcode: currentProduct.barcode,
+        name: currentProduct.name,
+        quantity: qty,
+        warehouse: selectedWarehouse,
+        location: currentProduct.location
+      });
+    }
+
+    setScannedItems(updatedItems);
+    displayProductInfo(currentProduct);
+    showNotification(`Добавлено ${qty} единиц товара "${currentProduct.name}"`);
+  };
+
+  // Отображение информации о товаре
+  const displayProductInfo = (product) => {
+    const quantity = getCurrentQuantity(product);
+    setCurrentProduct({
+      ...product,
+      quantity: quantity
+    });
+  };
+
+  // Получение текущего количества товара
+  const getCurrentQuantity = (product) => {
+    const item = scannedItems.find(i => i.barcode === product.barcode);
+    return item ? item.quantity : 0;
+  };
+
+  // Добавление количества
+  const addQuantity = () => {
+    if (!currentProduct) {
+      alert('Сначала отсканируйте товар');
+      return;
+    }
+
+    if (quantity <= 0) {
+      alert('Количество должно быть положительным числом');
+      return;
+    }
+
+    if (isInEditMode) {
+      const existingIndex = scannedItems.findIndex(item => item.barcode === currentProduct.barcode);
+      if (existingIndex !== -1) {
+        const updatedItems = [...scannedItems];
+        updatedItems[existingIndex] = {
+          ...updatedItems[existingIndex],
+          quantity: quantity
+        };
+        setScannedItems(updatedItems);
+        displayProductInfo(currentProduct);
+        showNotification(`Количество товара "${currentProduct.name}" изменено на ${quantity}`);
+        debugLog(`Товар отредактирован: ${currentProduct.name} → ${quantity}`);
+      }
+      setIsInEditMode(false);
+      setCurrentProduct(null);
+    } else {
+      addScannedItem(quantity);
+    }
+
+    setQuantity(1);
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
+    }
+  };
+
+  // Удаление товара
+  const deleteItem = (barcode) => {
+    const updatedItems = scannedItems.filter(item => item.barcode !== barcode);
+    setScannedItems(updatedItems);
+    
+    if (currentProduct && currentProduct.barcode === barcode) {
+      setCurrentProduct(null);
+    }
+    
+    showNotification('Товар удален из списка');
+    debugLog(`Товар удален: ${barcode}`);
+  };
+
+  // Редактирование товара
+  const editItem = (barcode) => {
+    const item = scannedItems.find(i => i.barcode === barcode);
+    if (!item) return;
+
+    const product = nomenclature.find(p => p.barcode === barcode) || item;
+    setCurrentProduct(product);
+    setQuantity(item.quantity);
+    setIsInEditMode(true);
+    setActiveTab('scan');
+    
+    showNotification(`Редактирование товара: ${product.name}`);
+    debugLog(`Редактирование товара: ${barcode}`);
+  };
+
+  // Экспорт в CSV
+  const exportToCSV = () => {
+    if (scannedItems.length === 0) {
+      alert('Нет данных для экспорта');
+      return;
+    }
+
+    debugLog('Экспорт данных в CSV');
+    const BOM = "\uFEFF";
+    let csvContent = BOM + "Код;Наименование;Количество;Штрих-код;Склад;Расположение\n";
+    
+    scannedItems.forEach(item => {
+      csvContent += `${item.code};"${item.name}";${item.quantity};${item.barcode};${item.warehouse};${item.location}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `инвентаризация_${date}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showNotification('Данные экспортированы в CSV');
+  };
+
+  // Экспорт через WebSocket
+  const exportViaWebSocket = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      const reconnect = confirm('Нет подключения к серверу. Попробовать переподключиться?');
+      if (reconnect) {
+        connectWebSocket();
+        setTimeout(exportViaWebSocket, 1000);
+      }
+      debugLog('Попытка экспорта без активного WebSocket-соединения');
+      return;
+    }
+
+    if (scannedItems.length === 0) {
+      alert('Нет данных для экспорта');
+      return;
+    }
+
+    debugLog('Подготовка данных для экспорта через WebSocket...');
+    let i = 0;
+    
+    const sendNext = () => {
+      if (i < scannedItems.length) {
+        const item = scannedItems[i];
+        const data = `${item.barcode}g${item.quantity}\n`;
+        debugLog(`Отправка: ${data}`);
         
-        body {
-            background-color: var(--light-bg);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            padding-bottom: 80px;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+        try {
+          wsRef.current.send(data);
+          i++;
+          setTimeout(sendNext, 100);
+        } catch (err) {
+          const errorMessage = err.message || 'Неизвестная ошибка сети';
+          debugLog(`Ошибка WebSocket: ${errorMessage}`);
+          alert(`Ошибка отправки через WebSocket:\n${errorMessage}\nПроверьте:\n1. Запущен ли WebSocket-сервер\n2. Доступен ли IP в сети`);
         }
-        
-        .navbar {
-            background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            padding-top: 15px;
-            padding-bottom: 15px;
-        }
-        
-        .card {
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            margin-bottom: 16px;
-            border: none;
-            transition: transform 0.2s ease;
-        }
-        
-        .card:active {
-            transform: scale(0.98);
-        }
-        
-        .card-header {
-            background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            color: white;
-            border-radius: 12px 12px 0 0 !important;
-            font-weight: 600;
-            padding: 15px 20px;
-        }
-        
-        .btn-primary {
-            background-color: var(--primary-color);
-            border: none;
-            padding: 12px 20px;
-            font-size: 16px;
-            border-radius: 8px;
-        }
-        
-        .btn-success {
-            background-color: var(--success-color);
-            border: none;
-            padding: 12px 20px;
-            font-size: 16px;
-            border-radius: 8px;
-        }
-        
-        .btn-warning {
-            background-color: var(--warning-color);
-            border: none;
-            padding: 12px 20px;
-            font-size: 16px;
-            border-radius: 8px;
-            color: #fff;
-        }
-        
-        .back-button {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            font-size: 24px;
-            z-index: 1000;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: none;
-        }
-        
-        .nav-tabs .nav-link {
-            color: var(--primary-color);
-            font-weight: 500;
-            padding: 12px 15px;
-            font-size: 15px;
-        }
-        
-        .nav-tabs .nav-link.active {
-            color: var(--secondary-color);
-            font-weight: 600;
-            border-bottom: 3px solid var(--secondary-color);
-        }
-        
-        .product-item {
-            border-left: 4px solid var(--primary-color);
-            transition: all 0.2s ease;
-            margin-bottom: 12px;
-            border-radius: 8px;
-        }
-        
-        .product-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
-        }
-        
-        .scanned-count {
-            background-color: var(--secondary-color);
-            color: white;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            margin-left: 5px;
-        }
-        
-        .debug-panel {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: #f8d7da;
-            color: #721c24;
-            padding: 10px;
-            font-size: 12px;
-            z-index: 2000;
-            overflow: auto;
-            max-height: 100px;
-        }
-        
-        @media (max-width: 576px) {
-            .container {
-                padding: 10px;
-            }
-            
-            .card {
-                margin-bottom: 12px;
-            }
-            
-            .card-header {
-                padding: 12px 15px;
-            }
-            
-            .btn {
-                padding: 12px 16px;
-                font-size: 16px;
-            }
-            
-            .form-control, .form-select {
-                font-size: 16px;
-            }
-        }
-        
-        /* Классы для управления видимостью */
-        .screen-hidden {
-            display: none !important;
-        }
-        
-        .screen-visible {
-            display: block !important;
-        }
-        
-        .notification {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            background-color: var(--success-color);
-            color: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 1050;
-            opacity: 0;
-            transform: translateY(100px);
-            transition: opacity 0.3s, transform 0.3s;
-            max-width: 90%;
-        }
-        
-        .notification.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        
-        /* Стили для кнопок с иконками */
-        .btn i {
-            pointer-events: none;
-        }
-        
-        /* Оптимизация для сенсорных устройств */
-        .btn, .form-control, .form-select {
-            -webkit-tap-highlight-color: transparent;
-        }
-        
-        .quantity-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 15px;
-        }
-        
-        .quantity-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            font-weight: bold;
-        }
-        
-        .connection-status {
-            position: fixed;
-            top: 70px;
-            right: 20px;
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            z-index: 1000;
-        }
-        
-        .connected {
-            background-color: var(--success-color);
-            color: white;
-        }
-        
-        .disconnected {
-            background-color: #e74a3b;
-            color: white;
-        }
-        
-        .connecting {
-            background-color: #f6c23e;
-            color: white;
-        }
-        
-        .https-warning {
-            background-color: #f6c23e;
-            color: #000;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-            display: none;
-        }
-    </style>
-</head>
-<body>
-    <!-- Навигация -->
-    <nav class="navbar navbar-dark mb-4">
-        <div class="container">
-            <span class="navbar-brand mb-0 h1"><i class="fas fa-cubes me-2"></i>Инвентаризация</span>
+      } else {
+        debugLog('Все данные отправлены через WebSocket');
+        showNotification('Данные успешно отправлены через WebSocket!');
+      }
+    };
+    
+    sendNext();
+  };
+
+  // Показ уведомления
+  const showNotification = (message) => {
+    const notification = document.createElement('div');
+    notification.className = 'fixed top-20 right-4 bg-blue-500 text-white p-4 rounded-lg shadow-lg z-50 transition-opacity duration-300 opacity-0';
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.classList.remove('opacity-0');
+      notification.classList.add('opacity-100');
+    }, 10);
+    
+    setTimeout(() => {
+      notification.classList.remove('opacity-100');
+      notification.classList.add('opacity-0');
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 300);
+    }, 3000);
+    
+    debugLog(`Показано уведомление: ${message}`);
+  };
+
+  // Обработчики событий
+  const handleBarcodeKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      processBarcode(e.target.value.trim());
+      e.target.value = '';
+    }
+  };
+
+  const handleQuantityKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      addQuantity();
+    }
+  };
+
+  // Проверка HTTPS при загрузке
+  useEffect(() => {
+    if (window.location.protocol === 'https:') {
+      setShowHttpsWarning(true);
+      setUseSecureProtocol(true);
+    }
+  }, []);
+
+  // Автоматическое подключение при загрузке
+  useEffect(() => {
+    setTimeout(() => {
+      if (serverIp) {
+        connectWebSocket();
+      }
+    }, 1000);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gray-50 font-sans">
+      {/* Навигация */}
+      <nav className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 shadow-lg">
+        <div className="container mx-auto flex items-center">
+          <i className="fas fa-cubes mr-2 text-xl"></i>
+          <span className="text-xl font-bold">Инвентаризация</span>
         </div>
-    </nav>
+      </nav>
 
-    <!-- Предупреждение о HTTPS -->
-    <div class="container">
-        <div id="httpsWarning" class="https-warning">
-            <i class="fas fa-exclamation-triangle me-2"></i>
-            <strong>Внимание:</strong> Страница загружена по HTTPS. Для работы с WebSocket используйте WSS (Secure WebSocket) или загрузите страницу по HTTP.
+      {/* Предупреждение о HTTPS */}
+      {showHttpsWarning && (
+        <div className="container mx-auto px-4 py-3 bg-yellow-100 text-yellow-800 rounded-lg mt-4 flex items-center">
+          <i className="fas fa-exclamation-triangle mr-2"></i>
+          <strong>Внимание:</strong> Страница загружена по HTTPS. Для работы с WebSocket используйте WSS (Secure WebSocket) или загрузите страницу по HTTP.
         </div>
-    </div>
+      )}
 
-    <!-- Статус подключения -->
-    <div id="connectionStatus" class="connection-status disconnected">
-        <i class="fas fa-plug me-1"></i>Нет подключения
-    </div>
+      {/* Статус подключения */}
+      <div className={`fixed top-20 right-4 px-3 py-2 rounded-full text-xs font-semibold z-50 ${
+        connectionStatus === 'connected' ? 'bg-green-500 text-white' :
+        connectionStatus === 'connecting' ? 'bg-yellow-500 text-white' :
+        'bg-red-500 text-white'
+      }`}>
+        <i className={`fas ${connectionStatus === 'connected' ? 'fa-plug' : connectionStatus === 'connecting' ? 'fa-sync-alt' : 'fa-plug'} mr-1`}></i>
+        {connectionStatus === 'connected' ? 'Подключено' : connectionStatus === 'connecting' ? 'Подключение...' : 'Нет подключения'}
+      </div>
 
-    <div class="container">
-        <!-- Главный экран -->
-        <div id="main-screen" class="screen-visible">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Тип инвентаризации</h5>
-                </div>
-                <div class="card-body">
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="radio" name="inventoryType" id="byLocation" value="location" checked>
-                        <label class="form-check-label" for="byLocation">
-                            По местам хранения
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="inventoryType" id="byNomenclature" value="nomenclature">
-                        <label class="form-check-label" for="byNomenclature">
-                            По номенклатуре
-                        </label>
-                    </div>
-                </div>
+      <div className="container mx-auto px-4 py-6">
+        {/* Главный экран */}
+        {currentScreen === 'main' && (
+          <div>
+            {/* Тип инвентаризации */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-lg font-semibold mb-4">Тип инвентаризации</h2>
+              <div className="space-y-3">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="inventoryType"
+                    value="location"
+                    checked={inventoryType === 'location'}
+                    onChange={(e) => setInventoryType(e.target.value)}
+                    className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span>По местам хранения</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="inventoryType"
+                    value="nomenclature"
+                    checked={inventoryType === 'nomenclature'}
+                    onChange={(e) => setInventoryType(e.target.value)}
+                    className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span>По номенклатуре</span>
+                </label>
+              </div>
             </div>
-            
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Выбор склада</h5>
-                </div>
-                <div class="card-body">
-                    <select class="form-select" id="warehouseSelect">
-                        <option value="ТВЗ">Склад основного товара ТВЗ</option>
-                        <option value="Электромаркет">Склад Электромаркет</option>
-                    </select>
-                </div>
+
+            {/* Выбор склада */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-lg font-semibold mb-4">Выбор склада</h2>
+              <select
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={selectedWarehouse}
+                onChange={(e) => setSelectedWarehouse(e.target.value)}
+              >
+                <option value="ТВЗ">Склад основного товара ТВЗ</option>
+                <option value="Электромаркет">Склад Электромаркет</option>
+              </select>
             </div>
-            
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Настройки подключения</h5>
+
+            {/* Настройки подключения */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-lg font-semibold mb-4">Настройки подключения</h2>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="serverIp" className="block text-sm font-medium text-gray-700 mb-2">IP-адрес сервера</label>
+                  <input
+                    type="text"
+                    id="serverIp"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Введите IP-адрес сервера"
+                    value={serverIp}
+                    onChange={(e) => setServerIp(e.target.value)}
+                  />
                 </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="serverIp" class="form-label">IP-адрес сервера</label>
-                        <input type="text" class="form-control" id="serverIp" placeholder="Введите IP-адрес сервера">
-                    </div>
-                    <div class="mb-3">
-                        <label for="serverPort" class="form-label">Порт сервера</label>
-                        <input type="number" class="form-control" id="serverPort" value="8765">
-                    </div>
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" id="useSecureProtocol">
-                        <label class="form-check-label" for="useSecureProtocol">
-                            Использовать безопасное соединение (WSS)
-                        </label>
-                    </div>
-                    <button class="btn btn-outline-primary w-100" id="testConnection">
-                        <i class="fas fa-plug me-2"></i>Проверить подключение
-                    </button>
+                <div>
+                  <label htmlFor="serverPort" className="block text-sm font-medium text-gray-700 mb-2">Порт сервера</label>
+                  <input
+                    type="number"
+                    id="serverPort"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={serverPort}
+                    onChange={(e) => setServerPort(e.target.value)}
+                  />
                 </div>
-            </div>
-            
-            <div class="d-grid gap-2 mb-4">
-                <button class="btn btn-primary btn-lg" id="startInventory">
-                    <i class="fas fa-play-circle me-2"></i>Начать инвентаризацию
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="useSecureProtocol"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    checked={useSecureProtocol}
+                    onChange={(e) => setUseSecureProtocol(e.target.checked)}
+                  />
+                  <label htmlFor="useSecureProtocol" className="ml-2 block text-sm text-gray-700">
+                    Использовать безопасное соединение (WSS)
+                  </label>
+                </div>
+                <button
+                  onClick={testConnection}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center"
+                >
+                  <i className="fas fa-plug mr-2"></i>Проверить подключение
                 </button>
+              </div>
             </div>
-        </div>
 
-        <!-- Экран сканирования -->
-        <div id="scan-screen" class="screen-hidden">
-            <ul class="nav nav-tabs mb-4" id="scanTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="scan-tab" data-bs-toggle="tab" data-bs-target="#scan" type="button" role="tab">
-                        <i class="fas fa-barcode me-1"></i>Сканирование
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="scanned-tab" data-bs-toggle="tab" data-bs-target="#scanned" type="button" role="tab">
-                        <i class="fas fa-list me-1"></i>Отсканировано
-                        <span class="scanned-count" id="scannedCount">0</span>
-                    </button>
-                </li>
+            {/* Кнопка начала инвентаризации */}
+            <div className="mb-6">
+              <button
+                onClick={startInventory}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg text-lg transition duration-200 flex items-center justify-center"
+              >
+                <i className="fas fa-play-circle mr-2"></i>Начать инвентаризацию
+              </button>
+            </div>
+
+            {/* Тест совместимости */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold mb-4">Тест совместимости</h2>
+              <button
+                onClick={testCompatibility}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center"
+              >
+                <i className="fas fa-check-circle mr-2"></i>Проверить совместимость
+              </button>
+              {compatibilityResults.length > 0 && (
+                <div className="mt-4 p-4 bg-gray-100 rounded-lg">
+                  <ul className="space-y-2">
+                    {compatibilityResults.map((result, index) => (
+                      <li key={index} className={result.includes('НЕ') ? 'text-red-600' : 'text-green-600'}>
+                        {result}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Экран сканирования */}
+        {currentScreen === 'scan' && (
+          <div>
+            {/* Вкладки */}
+            <ul className="flex border-b mb-6">
+              <li className="mr-2">
+                <button
+                  className={`py-3 px-4 font-medium rounded-t-lg transition-colors ${
+                    activeTab === 'scan' 
+                      ? 'bg-white text-blue-600 border-b-2 border-blue-600' 
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  onClick={() => setActiveTab('scan')}
+                >
+                  <i className="fas fa-barcode mr-1"></i>Сканирование
+                </button>
+              </li>
+              <li>
+                <button
+                  className={`py-3 px-4 font-medium rounded-t-lg transition-colors flex items-center ${
+                    activeTab === 'scanned' 
+                      ? 'bg-white text-blue-600 border-b-2 border-blue-600' 
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  onClick={() => setActiveTab('scanned')}
+                >
+                  <i className="fas fa-list mr-1"></i>Отсканировано
+                  <span className="ml-2 bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                    {scannedItems.length}
+                  </span>
+                </button>
+              </li>
             </ul>
-            
-            <div class="tab-content" id="scanTabContent">
-                <!-- Вкладка сканирования -->
-                <div class="tab-pane fade show active" id="scan" role="tabpanel">
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h5 class="mb-0">Сканирование товара</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <label for="barcodeInput" class="form-label">Штрих-код товара</label>
-                                <input type="text" class="form-control" id="barcodeInput" placeholder="Введите штрих-код" autocomplete="off">
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="quantityInput" class="form-label">Добавить количество (по умолчанию +1)</label>
-                                <div class="input-group">
-                                    <button class="btn btn-outline-secondary quantity-btn" type="button" id="decreaseQuantity">-</button>
-                                    <input type="number" class="form-control text-center" id="quantityInput" min="1" value="1">
-                                    <button class="btn btn-outline-secondary quantity-btn" type="button" id="increaseQuantity">+</button>
-                                </div>
-                            </div>
-                            
-                            <button class="btn btn-success w-100" id="addQuantity">
-                                <i class="fas fa-plus-circle me-2"></i>Добавить количество
-                            </button>
-                            
-                            <div id="product-info" class="mt-4 screen-hidden">
-                                <h5>Информация о товаре</h5>
-                                <div class="product-info-content p-3 bg-light rounded"></div>
-                            </div>
-                        </div>
-                    </div>
+
+            {/* Вкладка сканирования */}
+            {activeTab === 'scan' && (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-lg font-semibold mb-4">Сканирование товара</h2>
+                
+                <div className="mb-4">
+                  <label htmlFor="barcodeInput" className="block text-sm font-medium text-gray-700 mb-2">Штрих-код товара</label>
+                  <input
+                    ref={barcodeInputRef}
+                    type="text"
+                    id="barcodeInput"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Введите штрих-код"
+                    onKeyPress={handleBarcodeKeyPress}
+                    autoComplete="off"
+                  />
                 </div>
                 
-                <!-- Вкладка отсканированного -->
-                <div class="tab-pane fade" id="scanned" role="tabpanel">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">Отсканированные товары</h5>
-                            <div>
-                                <button class="btn btn-sm btn-success me-2" id="exportCSV">
-                                    <i class="fas fa-file-export me-1"></i>CSV
-                                </button>
-                                <button class="btn btn-sm btn-info" id="exportNetwork">
-                                    <i class="fas fa-plug me-1"></i>Сервер
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div id="scanned-items-list">
-                                <p class="text-center text-muted mt-3">Нет отсканированных товаров</p>
-                            </div>
-                        </div>
-                    </div>
+                <div className="mb-4">
+                  <label htmlFor="quantityInput" className="block text-sm font-medium text-gray-700 mb-2">Добавить количество (по умолчанию +1)</label>
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+                      className="px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-l-lg transition-colors"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      id="quantityInput"
+                      className="w-full text-center p-3 border-t border-b border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="1"
+                      value={quantity}
+                      onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                      onKeyPress={handleQuantityKeyPress}
+                    />
+                    <button
+                      onClick={() => setQuantity(prev => prev + 1)}
+                      className="px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-r-lg transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-            </div>
-            
-            <button class="btn btn-danger back-button" id="back-button" title="Назад">
-                <i class="fas fa-arrow-left"></i>
+                
+                <button
+                  onClick={addQuantity}
+                  className="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center"
+                >
+                  <i className="fas fa-plus-circle mr-2"></i>Добавить количество
+                </button>
+                
+                {currentProduct && (
+                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                    <h3 className="font-semibold mb-3">Информация о товаре</h3>
+                    <div className="space-y-2 text-sm">
+                      <p><strong>Код:</strong> {currentProduct.code}</p>
+                      <p><strong>Наименование:</strong> {currentProduct.name}</p>
+                      <p><strong>Штрих-код:</strong> {currentProduct.barcode}</p>
+                      <p><strong>Остаток на складе ({selectedWarehouse}):</strong> {currentProduct.stock ? currentProduct.stock[selectedWarehouse] : 0}</p>
+                      <p><strong>Забронировано:</strong> {currentProduct.reserved}</p>
+                      <p><strong>Место хранения:</strong> {currentProduct.location}</p>
+                      <p><strong>Текущее количество:</strong> {getCurrentQuantity(currentProduct)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Вкладка отсканированного */}
+            {activeTab === 'scanned' && (
+              <div className="bg-white rounded-lg shadow-md">
+                <div className="flex justify-between items-center p-6 border-b">
+                  <h2 className="text-lg font-semibold">Отсканированные товары</h2>
+                  <div>
+                    <button
+                      onClick={exportToCSV}
+                      className="mr-2 bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded text-sm transition duration-200 flex items-center"
+                    >
+                      <i className="fas fa-file-export mr-1"></i>CSV
+                    </button>
+                    <button
+                      onClick={exportViaWebSocket}
+                      className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded text-sm transition duration-200 flex items-center"
+                    >
+                      <i className="fas fa-plug mr-1"></i>Сервер
+                    </button>
+                  </div>
+                </div>
+                <div className="p-6">
+                  {scannedItems.length === 0 ? (
+                    <p className="text-center text-gray-500 mt-3">Нет отсканированных товаров</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {scannedItems.map((item) => (
+                        <div key={item.barcode} className="border-l-4 border-blue-500 bg-white p-4 rounded">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-medium">{item.name}</h3>
+                              <p className="text-gray-600 text-sm">Код: {item.code} | Штрих-код: {item.barcode}</p>
+                              <p className="text-gray-800">Количество: <strong>{item.quantity}</strong></p>
+                              <p className="text-gray-600 text-sm">Склад: {item.warehouse} | Расположение: {item.location}</p>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => editItem(item.barcode)}
+                                className="px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded text-sm transition-colors"
+                              >
+                                <i className="fas fa-edit"></i>
+                              </button>
+                              <button
+                                onClick={() => deleteItem(item.barcode)}
+                                className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded text-sm transition-colors"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Кнопка назад */}
+            <button
+              onClick={backToMain}
+              className="fixed bottom-6 left-6 w-14 h-14 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl transition-colors"
+              title="Назад"
+            >
+              <i className="fas fa-arrow-left"></i>
             </button>
-        </div>
+          </div>
+        )}
+      </div>
+
+      {/* Панель отладки */}
+      <div className="fixed bottom-0 left-0 right-0 bg-red-100 text-red-800 p-3 text-xs z-50 overflow-auto max-h-24">
+        <strong>Отладка:</strong> {debugMessage}
+      </div>
     </div>
+  );
+};
 
-    <!-- Панель отладки -->
-    <div class="debug-panel" id="debug-panel">
-        <strong>Отладка:</strong> <span id="debug-info">Готов к работе</span>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Инициализация данных
-        let scannedItems = [];
-        let currentProduct = null;
-        let selectedWarehouse = 'ТВЗ';
-        let isInEditMode = false;
-        let ws = null;
-        let wsReconnectAttempts = 0;
-        const MAX_RECONNECT_ATTEMPTS = 10;
-        const RECONNECT_DELAYS = [1000, 2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000];
-
-        // Демо-данные номенклатуры
-        const nomenclature = [
-            { id: 1, code: '100001', barcode: '4601234567890', name: 'Смартфон Samsung Galaxy S21', stock: { 'ТВЗ': 50, 'Электромаркет': 25 }, reserved: 5, location: 'Секция A-1' },
-            { id: 2, code: '100002', barcode: '4601234567891', name: 'Ноутбук Lenovo IdeaPad 5', stock: { 'ТВЗ': 30, 'Электромаркет': 15 }, reserved: 3, location: 'Секция B-2' },
-            { id: 3, code: '100003', barcode: '4601234567892', name: 'Наушники Sony WH-1000XM4', stock: { 'ТВЗ': 20, 'Электромаркет': 10 }, reserved: 2, location: 'Секция C-3' },
-            { id: 4, code: '100004', barcode: '4601234567893', name: 'Планшет Apple iPad Air', stock: { 'ТВЗ': 15, 'Электромаркет': 8 }, reserved: 1, location: 'Секция D-4' },
-            { id: 5, code: '100005', barcode: '4601234567894', name: 'Умные часы Apple Watch Series 7', stock: { 'ТВЗ': 25, 'Электромаркет': 12 }, reserved: 4, location: 'Секция E-5' }
-        ];
-
-        // Элементы DOM
-        const mainScreen = document.getElementById('main-screen');
-        const scanScreen = document.getElementById('scan-screen');
-        const barcodeInput = document.getElementById('barcodeInput');
-        const productInfo = document.getElementById('product-info');
-        const productInfoContent = document.querySelector('.product-info-content');
-        const scannedItemsList = document.getElementById('scanned-items-list');
-        const scannedCount = document.getElementById('scannedCount');
-        const warehouseSelect = document.getElementById('warehouseSelect');
-        const debugPanel = document.getElementById('debug-panel');
-        const debugInfo = document.getElementById('debug-info');
-        const quantityInput = document.getElementById('quantityInput');
-        const addQuantityBtn = document.getElementById('addQuantity');
-        const decreaseQuantityBtn = document.getElementById('decreaseQuantity');
-        const increaseQuantityBtn = document.getElementById('increaseQuantity');
-        const connectionStatus = document.getElementById('connectionStatus');
-        const serverIpInput = document.getElementById('serverIp');
-        const serverPortInput = document.getElementById('serverPort');
-        const testConnectionBtn = document.getElementById('testConnection');
-        const useSecureProtocol = document.getElementById('useSecureProtocol');
-        const httpsWarning = document.getElementById('httpsWarning');
-
-        // Проверяем, загружена ли страница по HTTPS
-        if (window.location.protocol === 'https:') {
-            httpsWarning.style.display = 'block';
-            useSecureProtocol.checked = true;
-        }
-
-        // Функция для отладки
-        function debugLog(message) {
-            const timestamp = new Date().toISOString().slice(11, 23);
-            const fullMessage = `[${timestamp}] ${message}`;
-            debugInfo.textContent = fullMessage;
-            debugPanel.style.display = 'block';
-            console.log(fullMessage);
-        }
-
-        // Обновление статуса подключения
-        function updateConnectionStatus(status) {
-            connectionStatus.className = `connection-status ${status}`;
-            
-            if (status === 'connected') {
-                connectionStatus.innerHTML = '<i class="fas fa-plug me-1"></i>Подключено';
-            } else if (status === 'connecting') {
-                connectionStatus.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Подключение...';
-            } else {
-                connectionStatus.innerHTML = '<i class="fas fa-plug me-1"></i>Нет подключения';
-            }
-        }
-
-        // Инициализация при загрузке
-        document.addEventListener('DOMContentLoaded', function() {
-            debugLog('Документ загружен, инициализация приложения');
-            
-            // Загрузка сохраненных данных
-            loadSavedData();
-            
-            // Обработчики событий
-            document.getElementById('startInventory').addEventListener('click', startInventory);
-            document.getElementById('back-button').addEventListener('click', backToMain);
-            document.getElementById('addQuantity').addEventListener('click', addQuantity);
-            document.getElementById('exportCSV').addEventListener('click', exportToCSV);
-            document.getElementById('exportNetwork').addEventListener('click', exportViaWebSocket);
-            testConnectionBtn.addEventListener('click', testConnection);
-            
-            // Обработчики для поля штрих-кода
-            barcodeInput.addEventListener('change', processBarcode);
-            barcodeInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    processBarcode();
-                }
-            });
-            
-            // Обработчики для управления количеством
-            decreaseQuantityBtn.addEventListener('click', function() {
-                const currentValue = parseInt(quantityInput.value) || 1;
-                if (currentValue > 1) {
-                    quantityInput.value = currentValue - 1;
-                }
-            });
-            
-            increaseQuantityBtn.addEventListener('click', function() {
-                const currentValue = parseInt(quantityInput.value) || 1;
-                quantityInput.value = currentValue + 1;
-            });
-            
-            quantityInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    addQuantity();
-                }
-            });
-            
-            // Автоматическое подключение при загрузке, если есть сохраненные настройки
-            const savedServerIp = localStorage.getItem('serverIp');
-            if (savedServerIp) {
-                setTimeout(connectWebSocket, 1000);
-            }
-            
-            debugLog('Инициализация завершена');
-        });
-
-        // Функции
-        function loadSavedData() {
-            try {
-                const savedData = localStorage.getItem('scannedItems');
-                const savedWarehouse = localStorage.getItem('selectedWarehouse');
-                const savedServerIp = localStorage.getItem('serverIp');
-                const savedServerPort = localStorage.getItem('serverPort');
-                const savedUseSecure = localStorage.getItem('useSecureProtocol');
-                
-                if (savedData) {
-                    scannedItems = JSON.parse(savedData);
-                    updateScannedList();
-                }
-                
-                if (savedWarehouse) {
-                    warehouseSelect.value = savedWarehouse;
-                    selectedWarehouse = savedWarehouse;
-                }
-                
-                if (savedServerIp) {
-                    serverIpInput.value = savedServerIp;
-                }
-                
-                if (savedServerPort) {
-                    serverPortInput.value = savedServerPort;
-                }
-                
-                if (savedUseSecure) {
-                    useSecureProtocol.checked = savedUseSecure === 'true';
-                }
-                
-                debugLog('Данные загружены из localStorage');
-            } catch (e) {
-                debugLog('Ошибка при загрузке данных: ' + e.message);
-            }
-        }
-
-        function testConnection() {
-            const ip = serverIpInput.value.trim();
-            const port = serverPortInput.value.trim();
-            const useSecure = useSecureProtocol.checked;
-            
-            if (!ip) {
-                alert('Введите IP-адрес сервера');
-                return;
-            }
-            
-            localStorage.setItem('serverIp', ip);
-            localStorage.setItem('serverPort', port);
-            localStorage.setItem('useSecureProtocol', useSecure);
-            
-            // Закрыть существующее соединение
-            if (ws) {
-                ws.close();
-                ws = null;
-            }
-            
-            // Попробовать подключиться
-            connectWebSocket();
-        }
-
-        function connectWebSocket() {
-            let serverIp = localStorage.getItem('serverIp');
-            let serverPort = localStorage.getItem('serverPort') || '8765';
-            const useSecure = localStorage.getItem('useSecureProtocol') === 'true';
-            
-            if (!serverIp) {
-                serverIp = prompt('Введите IP-адрес сервера для WebSocket:', '10.7.0.78');
-                if (serverIp) {
-                    localStorage.setItem('serverIp', serverIp);
-                    serverIpInput.value = serverIp;
-                } else {
-                    debugLog('Отмена подключения: IP не указан');
-                    return;
-                }
-            }
-
-            // Определяем протокол подключения
-            const protocol = useSecure ? 'wss' : 'ws';
-            const wsUrl = `${protocol}://${serverIp}:${serverPort}`;
-            
-            debugLog(`Попытка подключения к WebSocket: ${wsUrl}`);
-            updateConnectionStatus('connecting');
-            
-            try {
-                ws = new WebSocket(wsUrl);
-                
-                ws.onopen = function() {
-                    wsReconnectAttempts = 0;
-                    debugLog('WebSocket соединение установлено');
-                    showNotification('Подключено к серверу');
-                    updateConnectionStatus('connected');
-                };
-                
-                ws.onmessage = function(event) {
-                    debugLog('Получено сообщение от сервера: ' + event.data);
-                };
-                
-                ws.onerror = function(error) {
-                    debugLog('Ошибка WebSocket: ' + JSON.stringify(error));
-                    showNotification('Ошибка подключения к серверу');
-                    updateConnectionStatus('disconnected');
-                };
-                
-                ws.onclose = function(event) {
-                    debugLog(`WebSocket закрыт. Код: ${event.code}, причина: ${event.reason}`);
-                    updateConnectionStatus('disconnected');
-                    
-                    if (wsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                        const delay = RECONNECT_DELAYS[wsReconnectAttempts] || 5000;
-                        wsReconnectAttempts++;
-                        
-                        debugLog(`Попытка переподключения (${wsReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) через ${delay}ms`);
-                        setTimeout(connectWebSocket, delay);
-                    } else {
-                        debugLog('Достигнуто максимальное количество попыток переподключения');
-                        showNotification('Не удалось подключиться к серверу');
-                    }
-                };
-            } catch (e) {
-                debugLog('Ошибка инициализации WebSocket: ' + e.message);
-                showNotification('Ошибка подключения к серверу');
-                updateConnectionStatus('disconnected');
-            }
-        }
-
-        // Остальные функции (startInventory, backToMain, processBarcode, findProductByBarcode,
-        // displayProductInfo, getCurrentQuantity, addScannedItem, addQuantity, updateScannedList,
-        // deleteItem, editItem, exportToCSV, exportViaWebSocket, showNotification)
-        // остаются без изменений, как в предыдущей версии
-
-        function startInventory() {
-            debugLog('Нажата кнопка "Начать инвентаризацию"');
-            
-            // Сохранение выбранного склада
-            selectedWarehouse = warehouseSelect.value;
-            localStorage.setItem('selectedWarehouse', selectedWarehouse);
-            
-            // Переключение экранов
-            mainScreen.classList.remove('screen-visible');
-            mainScreen.classList.add('screen-hidden');
-            
-            scanScreen.classList.remove('screen-hidden');
-            scanScreen.classList.add('screen-visible');
-            
-            debugLog('Переключение экранов: главный -> сканирование');
-            
-            // Фокус на поле ввода штрих-кода
-            barcodeInput.focus();
-        }
-
-        function backToMain() {
-            debugLog('Нажата кнопка "Назад"');
-            
-            // Переключение экранов
-            scanScreen.classList.remove('screen-visible');
-            scanScreen.classList.add('screen-hidden');
-            
-            mainScreen.classList.remove('screen-hidden');
-            mainScreen.classList.add('screen-visible');
-            
-            debugLog('Переключение экранов: сканирование -> главный');
-        }
-
-        function processBarcode() {
-            // Сбрасываем режим редактирования при новом сканировании
-            isInEditMode = false;
-            
-            const barcode = barcodeInput.value.trim();
-            if (!barcode) return;
-            
-            debugLog('Обработка штрих-кода: ' + barcode);
-            
-            // Поиск товара в номенклатуре
-            const product = findProductByBarcode(barcode);
-            
-            if (product) {
-                displayProductInfo(product);
-                currentProduct = product;
-                // Автоматически добавляем товар с количеством 1
-                addScannedItem(1);
-            } else {
-                // Создаем новый товар, если не найден в базе
-                currentProduct = {
-                    id: Date.now(),
-                    barcode: barcode,
-                    code: 'Новый',
-                    name: 'Неизвестный товар',
-                    stock: { 'ТВЗ': 0, 'Электромаркет': 0 },
-                    reserved: 0,
-                    location: 'Не указано',
-                    quantity: 0
-                };
-                displayProductInfo(currentProduct);
-                // Автоматически добавляем товар с количеством 1
-                addScannedItem(1);
-            }
-            
-            barcodeInput.value = '';
-            // Фокус остается на поле ввода штрих-кода для следующего сканирования
-            barcodeInput.focus();
-        }
-
-        function findProductByBarcode(barcode) {
-            return nomenclature.find(item => item.barcode === barcode);
-        }
-
-        function displayProductInfo(product) {
-            const quantity = getCurrentQuantity(product);
-            
-            productInfoContent.innerHTML = `
-                <p><strong>Код:</strong> ${product.code}</p>
-                <p><strong>Наименование:</strong> ${product.name}</p>
-                <p><strong>Штрих-код:</strong> ${product.barcode}</p>
-                <p><strong>Остаток на складе (${selectedWarehouse}):</strong> ${product.stock[selectedWarehouse]}</p>
-                <p><strong>Забронировано:</strong> ${product.reserved}</p>
-                <p><strong>Место хранения:</strong> ${product.location}</p>
-                <p><strong>Текущее количество:</strong> ${quantity}</p>
-            `;
-            
-            productInfo.classList.remove('screen-hidden');
-            productInfo.classList.add('screen-visible');
-            
-            debugLog('Отображение информации о товаре: ' + product.name);
-        }
-
-        function getCurrentQuantity(product) {
-            const existingItem = scannedItems.find(item => item.barcode === product.barcode);
-            return existingItem ? existingItem.quantity : 0;
-        }
-
-        function addScannedItem(quantity) {
-            if (!currentProduct) {
-                alert('Сначала отсканируйте товар');
-                return;
-            }
-            
-            debugLog('Добавление количества: ' + quantity + ' для товара ' + currentProduct.name);
-            
-            // Проверяем, есть ли уже такой товар в отсканированных
-            const existingIndex = scannedItems.findIndex(item => item.barcode === currentProduct.barcode);
-            
-            if (existingIndex !== -1) {
-                // Добавляем количество к существующей записи
-                scannedItems[existingIndex].quantity += quantity;
-            } else {
-                // Добавляем новую запись
-                scannedItems.push({
-                    id: currentProduct.id,
-                    code: currentProduct.code,
-                    barcode: currentProduct.barcode,
-                    name: currentProduct.name,
-                    quantity: quantity,
-                    warehouse: selectedWarehouse,
-                    location: currentProduct.location
-                });
-            }
-            
-            // Сохранение данных
-            localStorage.setItem('scannedItems', JSON.stringify(scannedItems));
-            
-            // Обновление отображения
-            updateScannedList();
-            displayProductInfo(currentProduct);
-            
-            // Показать уведомление
-            showNotification(`Добавлено ${quantity} единиц товара "${currentProduct.name}"`);
-        }
-
-        function addQuantity() {
-            if (!currentProduct) {
-                alert('Сначала отсканируйте товар');
-                barcodeInput.focus();
-                return;
-            }
-            
-            const quantity = parseInt(quantityInput.value) || 1;
-            if (quantity <= 0) {
-                alert('Количество должно быть положительным числом');
-                quantityInput.focus();
-                quantityInput.select();
-                return;
-            }
-            
-            if (isInEditMode) {
-                // Режим редактирования — заменяем количество
-                const existingIndex = scannedItems.findIndex(item => item.barcode === currentProduct.barcode);
-                if (existingIndex !== -1) {
-                    scannedItems[existingIndex].quantity = quantity;
-                    localStorage.setItem('scannedItems', JSON.stringify(scannedItems));
-                    updateScannedList();
-                    displayProductInfo(currentProduct);
-                    showNotification(`Количество товара "${currentProduct.name}" изменено на ${quantity}`);
-                    debugLog(`Товар отредактирован: ${currentProduct.name} → ${quantity}`);
-                }
-                // Сбрасываем режим редактирования
-                isInEditMode = false;
-                currentProduct = null;
-            } else {
-                // Обычный режим — добавляем количество
-                addScannedItem(quantity);
-            }
-            
-            // Сброс поля количества
-            quantityInput.value = '1';
-            // Фокус на поле штрих-кода
-            barcodeInput.focus();
-        }
-
-        function updateScannedList() {
-            if (scannedItems.length === 0) {
-                scannedItemsList.innerHTML = '<p class="text-center text-muted mt-3">Нет отсканированных товаров</p>';
-                scannedCount.textContent = '0';
-                return;
-            }
-            
-            scannedCount.textContent = scannedItems.length;
-            
-            let html = '';
-            scannedItems.forEach(item => {
-                html += `
-                    <div class="product-item bg-white p-3 mb-3 rounded">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <h6 class="mb-1">${item.name}</h6>
-                                <p class="mb-1 text-muted">Код: ${item.code} | Штрих-код: ${item.barcode}</p>
-                                <p class="mb-1">Количество: <strong>${item.quantity}</strong></p>
-                                <p class="mb-0">Склад: ${item.warehouse} | Расположение: ${item.location}</p>
-                            </div>
-                            <div>
-                                <button class="btn btn-sm btn-outline-warning edit-item me-2" data-id="${item.barcode}">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger delete-item" data-id="${item.barcode}">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            scannedItemsList.innerHTML = html;
-            
-            // Добавляем обработчики для кнопок удаления
-            document.querySelectorAll('.delete-item').forEach(button => {
-                button.addEventListener('click', function() {
-                    const barcode = this.getAttribute('data-id');
-                    deleteItem(barcode);
-                });
-            });
-            
-            // Добавляем обработчики для кнопок редактирования
-            document.querySelectorAll('.edit-item').forEach(button => {
-                button.addEventListener('click', function() {
-                    const barcode = this.getAttribute('data-id');
-                    editItem(barcode);
-                });
-            });
-            
-            debugLog('Список отсканированных товаров обновлен: ' + scannedItems.length + ' позиций');
-        }
-
-        function deleteItem(barcode) {
-            scannedItems = scannedItems.filter(item => item.barcode !== barcode);
-            localStorage.setItem('scannedItems', JSON.stringify(scannedItems));
-            updateScannedList();
-            
-            if (currentProduct && currentProduct.barcode === barcode) {
-                productInfo.classList.remove('screen-visible');
-                productInfo.classList.add('screen-hidden');
-                currentProduct = null;
-            }
-            
-            showNotification('Товар удален из списка');
-            debugLog('Товар удален: ' + barcode);
-        }
-
-        function editItem(barcode) {
-            const item = scannedItems.find(item => item.barcode === barcode);
-            if (!item) return;
-            
-            // Находим товар в номенклатуре или используем данные из отсканированных
-            const product = findProductByBarcode(barcode) || item;
-            
-            // Устанавливаем как текущий товар
-            currentProduct = product;
-            displayProductInfo(product);
-            
-            // Устанавливаем текущее количество
-            quantityInput.value = item.quantity;
-            
-            // Включаем режим редактирования
-            isInEditMode = true;
-            
-            // Переключаемся на вкладка сканирования
-            document.getElementById('scan-tab').click();
-            
-            // Фокус на поле количества
-            quantityInput.focus();
-            quantityInput.select();
-            
-            showNotification('Редактирование товара: ' + product.name);
-            debugLog('Редактирование товара: ' + barcode);
-        }
-
-        function exportToCSV() {
-            if (scannedItems.length === 0) {
-                alert('Нет данных для экспорта');
-                return;
-            }
-            
-            debugLog('Экспорт данных в CSV');
-            
-            // Добавляем BOM для правильного отображения кириллицы в Excel
-            const BOM = "\uFEFF";
-            
-            // Создание CSV содержимого с правильным разделителем
-            let csvContent = BOM + "Код;Наименование;Количество;Штрих-код;Склад;Расположение\n";
-            
-            scannedItems.forEach(item => {
-                csvContent += `${item.code};"${item.name}";${item.quantity};${item.barcode};${item.warehouse};${item.location}\n`;
-            });
-            
-            // Создание и скачивание файла
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            const date = new Date().toISOString().slice(0, 10);
-            
-            link.setAttribute("href", url);
-            link.setAttribute("download", `инвентаризация_${date}.csv`);
-            link.style.visibility = 'hidden';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            showNotification('Данные экспортированы в CSV');
-        }
-
-        async function exportViaWebSocket() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                const reconnect = confirm('Нет подключения к серверу. Попробовать переподключиться?');
-                if (reconnect) {
-                    connectWebSocket();
-                    // Ждем немного перед повторной попыткой
-                    setTimeout(exportViaWebSocket, 1000);
-                }
-                debugLog('Попытка экспорта без активного WebSocket-соединения');
-                return;
-            }
-            
-            if (scannedItems.length === 0) {
-                alert('Нет данных для экспорта');
-                return;
-            }
-
-            debugLog('Подготовка данных для экспорта через WebSocket...');
-
-            try {
-                // Отправляем данные по одному товару за раз с задержкой
-                for (const item of scannedItems) {
-                    const data = `${item.barcode}g${item.quantity}\n`;
-                    debugLog(`Отправка: ${data}`);
-                    
-                    ws.send(data);
-                    
-                    // Ждем немного перед отправкой следующего товара
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-                
-                debugLog('Все данные отправлены через WebSocket');
-                showNotification('Данные успешно отправлены через WebSocket!');
-            } catch (err) {
-                const errorMessage = err.message || 'Неизвестная ошибка сети';
-                debugLog('Ошибка WebSocket: ' + errorMessage);
-                alert(`Ошибка отправки через WebSocket:\n${errorMessage}\n\nПроверьте:\n1. Запущен ли WebSocket-сервер\n2. Доступен ли IP в сети`);
-            }
-        }
-
-        function showNotification(message) {
-            // Создаем элемент уведомления
-            const notification = document.createElement('div');
-            notification.className = 'notification';
-            notification.textContent = message;
-            
-            document.body.appendChild(notification);
-            
-            // Показываем уведомление
-            setTimeout(() => {
-                notification.classList.add('show');
-            }, 10);
-            
-            // Удаляем уведомление через 3 секунды
-            setTimeout(() => {
-                notification.classList.remove('show');
-                setTimeout(() => {
-                    notification.remove();
-                }, 300);
-            }, 3000);
-            
-            debugLog('Показано уведомление: ' + message);
-        }
-    </script>
-</body>
-</html>
+export default App;
