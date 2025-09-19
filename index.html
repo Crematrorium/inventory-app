@@ -15,8 +15,6 @@ const App = () => {
   const [isInEditMode, setIsInEditMode] = useState(false);
   const [activeTab, setActiveTab] = useState('scan');
   const [showHttpsWarning, setShowHttpsWarning] = useState(false);
-  const [compatibilityResults, setCompatibilityResults] = useState([]);
-  const [debugMessage, setDebugMessage] = useState('Готов к работе');
 
   // Рефы для DOM элементов
   const barcodeInputRef = useRef(null);
@@ -34,13 +32,13 @@ const App = () => {
     { id: 5, code: '100005', barcode: '4601234567894', name: 'Умные часы Apple Watch Series 7', stock: { 'ТВЗ': 25, 'Электромаркет': 12 }, reserved: 4, location: 'Секция E-5' }
   ];
 
-  // Функция для отладки
-  const debugLog = (message) => {
-    const timestamp = new Date().toISOString().slice(11, 23);
-    const fullMessage = `[${timestamp}] ${message}`;
-    setDebugMessage(fullMessage);
-    console.log(fullMessage);
-  };
+  // Проверка HTTPS при загрузке
+  useEffect(() => {
+    if (window.location.protocol === 'https:') {
+      setShowHttpsWarning(true);
+      setUseSecureProtocol(true);
+    }
+  }, []);
 
   // Обновление статуса подключения
   const updateConnectionStatus = (status) => {
@@ -50,13 +48,13 @@ const App = () => {
   // Подключение к WebSocket
   const connectWebSocket = () => {
     if (!serverIp) {
-      debugLog('Отмена подключения: IP не указан');
+      console.log('Отмена подключения: IP не указан');
       return;
     }
 
     const protocol = useSecureProtocol ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${serverIp}:${serverPort}`;
-    debugLog(`Попытка подключения к WebSocket: ${wsUrl}`);
+    console.log(`Попытка подключения к WebSocket: ${wsUrl}`);
     updateConnectionStatus('connecting');
 
     try {
@@ -65,36 +63,36 @@ const App = () => {
 
       ws.onopen = () => {
         reconnectAttemptsRef.current = 0;
-        debugLog('WebSocket соединение установлено');
+        console.log('WebSocket соединение установлено');
         showNotification('Подключено к серверу');
         updateConnectionStatus('connected');
       };
 
       ws.onmessage = (event) => {
-        debugLog(`Получено сообщение от сервера: ${event.data}`);
+        console.log(`Получено сообщение от сервера: ${event.data}`);
       };
 
       ws.onerror = (error) => {
-        debugLog(`Ошибка WebSocket: ${error.message}`);
+        console.log(`Ошибка WebSocket: ${error.message}`);
         showNotification('Ошибка подключения к серверу');
         updateConnectionStatus('disconnected');
       };
 
       ws.onclose = (event) => {
-        debugLog(`WebSocket закрыт. Код: ${event.code}, причина: ${event.reason}`);
+        console.log(`WebSocket закрыт. Код: ${event.code}, причина: ${event.reason}`);
         updateConnectionStatus('disconnected');
         if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
           const delay = RECONNECT_DELAYS[reconnectAttemptsRef.current] || 5000;
           reconnectAttemptsRef.current++;
-          debugLog(`Попытка переподключения (${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS}) через ${delay}ms`);
+          console.log(`Попытка переподключения (${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS}) через ${delay}ms`);
           setTimeout(connectWebSocket, delay);
         } else {
-          debugLog('Достигнуто максимальное количество попыток переподключения');
+          console.log('Достигнуто максимальное количество попыток переподключения');
           showNotification('Не удалось подключиться к серверу');
         }
       };
     } catch (e) {
-      debugLog(`Ошибка инициализации WebSocket: ${e.message}`);
+      console.log(`Ошибка инициализации WebSocket: ${e.message}`);
       showNotification('Ошибка подключения к серверу');
       updateConnectionStatus('disconnected');
     }
@@ -117,41 +115,9 @@ const App = () => {
     connectWebSocket();
   };
 
-  // Проверка совместимости
-  const testCompatibility = () => {
-    const results = [];
-    
-    if (window.WebSocket) {
-      results.push('WebSocket: поддерживается');
-    } else {
-      results.push('WebSocket: НЕ поддерживается');
-    }
-    
-    if (typeof Array.prototype.find === 'function') {
-      results.push('Array.find(): поддерживается');
-    } else {
-      results.push('Array.find(): НЕ поддерживается');
-    }
-    
-    if (typeof document.body.style.flex !== 'undefined') {
-      results.push('Flexbox: поддерживается');
-    } else {
-      results.push('Flexbox: НЕ поддерживается');
-    }
-    
-    if (window.Promise) {
-      results.push('Promise: поддерживается');
-    } else {
-      results.push('Promise: НЕ поддерживается');
-    }
-
-    setCompatibilityResults(results);
-    debugLog(`Проверка совместимости завершена: ${results.length} тестов`);
-  };
-
   // Начало инвентаризации
   const startInventory = () => {
-    debugLog('Нажата кнопка "Начать инвентаризацию"');
+    console.log('Нажата кнопка "Начать инвентаризацию"');
     setCurrentScreen('scan');
     setTimeout(() => {
       if (barcodeInputRef.current) {
@@ -162,7 +128,7 @@ const App = () => {
 
   // Возврат на главный экран
   const backToMain = () => {
-    debugLog('Нажата кнопка "Назад"');
+    console.log('Нажата кнопка "Назад"');
     setCurrentScreen('main');
   };
 
@@ -170,7 +136,7 @@ const App = () => {
   const processBarcode = (barcode) => {
     setIsInEditMode(false);
     if (!barcode) return;
-    debugLog(`Обработка штрих-кода: ${barcode}`);
+    console.log(`Обработка штрих-кода: ${barcode}`);
 
     const product = nomenclature.find(p => p.barcode === barcode);
     if (product) {
@@ -199,7 +165,7 @@ const App = () => {
       return;
     }
 
-    debugLog(`Добавление количества: ${qty} для товара ${currentProduct.name}`);
+    console.log(`Добавление количества: ${qty} для товара ${currentProduct.name}`);
 
     const existingIndex = scannedItems.findIndex(item => item.barcode === currentProduct.barcode);
     let updatedItems = [...scannedItems];
@@ -264,7 +230,7 @@ const App = () => {
         setScannedItems(updatedItems);
         displayProductInfo(currentProduct);
         showNotification(`Количество товара "${currentProduct.name}" изменено на ${quantity}`);
-        debugLog(`Товар отредактирован: ${currentProduct.name} → ${quantity}`);
+        console.log(`Товар отредактирован: ${currentProduct.name} → ${quantity}`);
       }
       setIsInEditMode(false);
       setCurrentProduct(null);
@@ -288,7 +254,7 @@ const App = () => {
     }
     
     showNotification('Товар удален из списка');
-    debugLog(`Товар удален: ${barcode}`);
+    console.log(`Товар удален: ${barcode}`);
   };
 
   // Редактирование товара
@@ -303,7 +269,7 @@ const App = () => {
     setActiveTab('scan');
     
     showNotification(`Редактирование товара: ${product.name}`);
-    debugLog(`Редактирование товара: ${barcode}`);
+    console.log(`Редактирование товара: ${barcode}`);
   };
 
   // Экспорт в CSV
@@ -313,7 +279,7 @@ const App = () => {
       return;
     }
 
-    debugLog('Экспорт данных в CSV');
+    console.log('Экспорт данных в CSV');
     const BOM = "\uFEFF";
     let csvContent = BOM + "Код;Наименование;Количество;Штрих-код;Склад;Расположение\n";
     
@@ -342,7 +308,7 @@ const App = () => {
         connectWebSocket();
         setTimeout(exportViaWebSocket, 1000);
       }
-      debugLog('Попытка экспорта без активного WebSocket-соединения');
+      console.log('Попытка экспорта без активного WebSocket-соединения');
       return;
     }
 
@@ -351,14 +317,14 @@ const App = () => {
       return;
     }
 
-    debugLog('Подготовка данных для экспорта через WebSocket...');
+    console.log('Подготовка данных для экспорта через WebSocket...');
     let i = 0;
     
     const sendNext = () => {
       if (i < scannedItems.length) {
         const item = scannedItems[i];
         const data = `${item.barcode}g${item.quantity}\n`;
-        debugLog(`Отправка: ${data}`);
+        console.log(`Отправка: ${data}`);
         
         try {
           wsRef.current.send(data);
@@ -366,11 +332,11 @@ const App = () => {
           setTimeout(sendNext, 100);
         } catch (err) {
           const errorMessage = err.message || 'Неизвестная ошибка сети';
-          debugLog(`Ошибка WebSocket: ${errorMessage}`);
+          console.log(`Ошибка WebSocket: ${errorMessage}`);
           alert(`Ошибка отправки через WebSocket:\n${errorMessage}\nПроверьте:\n1. Запущен ли WebSocket-сервер\n2. Доступен ли IP в сети`);
         }
       } else {
-        debugLog('Все данные отправлены через WebSocket');
+        console.log('Все данные отправлены через WebSocket');
         showNotification('Данные успешно отправлены через WebSocket!');
       }
     };
@@ -398,7 +364,7 @@ const App = () => {
       }, 300);
     }, 3000);
     
-    debugLog(`Показано уведомление: ${message}`);
+    console.log(`Показано уведомление: ${message}`);
   };
 
   // Обработчики событий
@@ -414,14 +380,6 @@ const App = () => {
       addQuantity();
     }
   };
-
-  // Проверка HTTPS при загрузке
-  useEffect(() => {
-    if (window.location.protocol === 'https:') {
-      setShowHttpsWarning(true);
-      setUseSecureProtocol(true);
-    }
-  }, []);
 
   // Автоматическое подключение при загрузке
   useEffect(() => {
@@ -560,28 +518,6 @@ const App = () => {
               >
                 <i className="fas fa-play-circle mr-2"></i>Начать инвентаризацию
               </button>
-            </div>
-
-            {/* Тест совместимости */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-lg font-semibold mb-4">Тест совместимости</h2>
-              <button
-                onClick={testCompatibility}
-                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center"
-              >
-                <i className="fas fa-check-circle mr-2"></i>Проверить совместимость
-              </button>
-              {compatibilityResults.length > 0 && (
-                <div className="mt-4 p-4 bg-gray-100 rounded-lg">
-                  <ul className="space-y-2">
-                    {compatibilityResults.map((result, index) => (
-                      <li key={index} className={result.includes('НЕ') ? 'text-red-600' : 'text-green-600'}>
-                        {result}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -756,11 +692,6 @@ const App = () => {
             </button>
           </div>
         )}
-      </div>
-
-      {/* Панель отладки */}
-      <div className="fixed bottom-0 left-0 right-0 bg-red-100 text-red-800 p-3 text-xs z-50 overflow-auto max-h-24">
-        <strong>Отладка:</strong> {debugMessage}
       </div>
     </div>
   );
