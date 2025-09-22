@@ -1002,40 +1002,33 @@
         }
 
         function exportToCSV() {
-            if (scannedItems.length === 0) {
-                alert('Нет данных для экспорта');
-                return;
-            }
-            
-            debugLog('Экспорт данных в CSV');
-            
-            // Добавляем BOM для правильного отображения кириллицы в Excel
-            var BOM = "\uFEFF";
-            
-            // Создание CSV содержимого с правильным разделителем
-            var csvContent = BOM + "Код;Наименование;Количество;Штрих-код;Склад;Расположение\n";
-            
-            for (var i = 0; i < scannedItems.length; i++) {
-                var item = scannedItems[i];
-                csvContent += item.code + ';"' + item.name + '";' + item.quantity + ';' + item.barcode + ';' + item.warehouse + ';' + item.location + '\n';
-            }
-            
-            // Создание и скачивание файла
-            var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            var url = URL.createObjectURL(blob);
-            var link = document.createElement("a");
-            var date = new Date().toISOString().slice(0, 10);
-            
-            link.setAttribute("href", url);
-            link.setAttribute("download", "инвентаризация_" + date + ".csv");
-            link.style.visibility = 'hidden';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            showNotification('Данные экспортированы в CSV');
-        }
+    if (scannedItems.length === 0) {
+        alert('Нет данных для экспорта');
+        return;
+    }
+    debugLog('Экспорт данных в CSV');
+    // Добавляем BOM для правильного отображения кириллицы в Excel (опционально, т.к. данных кириллицы теперь нет)
+    var BOM = "\uFEFF";
+    // Создание CSV содержимого в формате "штрихкодgколичество"
+    var csvContent = BOM; // Начинаем с BOM
+    for (var i = 0; i < scannedItems.length; i++) {
+        var item = scannedItems[i];
+        csvContent += item.barcode + 'g' + item.quantity + '
+';
+    }
+    // Создание и скачивание файла
+    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    var date = new Date().toISOString().slice(0, 10);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "инвентаризация_" + date + ".csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showNotification('Данные экспортированы в CSV');
+}
 
         function exportViaWebSocket() {
             if (!ws || ws.readyState !== WebSocket.OPEN) {
