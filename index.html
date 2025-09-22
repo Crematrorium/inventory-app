@@ -270,6 +270,7 @@
             // Обработчики событий
             document.getElementById('addQuantity').addEventListener('click', addQuantity);
             document.getElementById('exportCSV').addEventListener('click', exportToCSV);
+
             // Обработчики для поля штрих-кода
             barcodeInput.addEventListener('change', processBarcode);
             barcodeInput.addEventListener('keypress', function(e) {
@@ -277,6 +278,27 @@
                     processBarcode();
                 }
             });
+
+            // 🔥 АВТОДОБАВЛЕНИЕ: Добавляем товар сразу после ввода любого штрих-кода (любой длины)
+            let inputTimeout = null;
+            barcodeInput.addEventListener('input', function(e) {
+                var value = e.target.value.trim();
+                if (value) {
+                    // Очищаем предыдущий таймаут, если ввод продолжается
+                    if (inputTimeout) {
+                        clearTimeout(inputTimeout);
+                    }
+                    // Устанавливаем новый таймаут
+                    inputTimeout = setTimeout(function() {
+                        // Проверяем, что значение не изменилось (пользователь не стер его)
+                        if (barcodeInput.value.trim() === value) {
+                            processBarcode();
+                        }
+                        inputTimeout = null; // Сбрасываем таймаут
+                    }, 300); // Задержка 300 мс для завершения ввода
+                }
+            });
+
             // Обработчики для управления количеством
             decreaseQuantityBtn.addEventListener('click', function() {
                 var currentValue = parseInt(quantityInput.value) || 1;
@@ -293,6 +315,7 @@
                     addQuantity();
                 }
             });
+
             debugLog('Инициализация завершена');
         });
 
