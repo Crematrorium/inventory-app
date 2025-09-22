@@ -19,26 +19,22 @@
             --light-bg: #f8f9fc;
             --dark-text: #333;
         }
-        
         body {
             background-color: var(--light-bg);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             padding-bottom: 80px;
             -webkit-font-smoothing: antialiased;
         }
-        
         .navbar {
             background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
             padding: 15px 0;
         }
-        
         .card {
             border-radius: 5px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             margin-bottom: 15px;
             border: none;
         }
-        
         .card-header {
             background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
             color: white;
@@ -46,27 +42,22 @@
             font-weight: 600;
             padding: 12px 15px;
         }
-        
         .btn {
             padding: 12px 20px;
             font-size: 16px;
             border-radius: 5px;
             border: none;
         }
-        
         .btn-primary {
             background-color: var(--primary-color);
         }
-        
         .btn-success {
             background-color: var(--success-color);
         }
-        
         .btn-warning {
             background-color: var(--warning-color);
             color: #fff;
         }
-        
         .back-button {
             position: fixed;
             bottom: 20px;
@@ -82,7 +73,6 @@
             justify-content: center;
             border: none;
         }
-        
         .scanned-count {
             background-color: var(--secondary-color);
             color: white;
@@ -95,7 +85,6 @@
             font-size: 12px;
             margin-left: 5px;
         }
-        
         .debug-panel {
             position: fixed;
             bottom: 0;
@@ -109,15 +98,12 @@
             overflow: auto;
             max-height: 100px;
         }
-        
         .screen-hidden {
             display: none !important;
         }
-        
         .screen-visible {
             display: block !important;
         }
-        
         .connection-status {
             position: fixed;
             top: 70px;
@@ -128,22 +114,18 @@
             font-weight: 600;
             z-index: 1000;
         }
-        
         .connected {
             background-color: var(--success-color);
             color: white;
         }
-        
         .disconnected {
             background-color: #e74a3b;
             color: white;
         }
-        
         .connecting {
             background-color: #f6c23e;
             color: white;
         }
-        
         .https-warning {
             background-color: #f6c23e;
             color: #000;
@@ -151,13 +133,11 @@
             border-radius: 5px;
             margin-bottom: 15px;
         }
-        
         /* Упрощенные стили для старых браузеров */
         .form-control, .form-select {
             padding: 10px;
             font-size: 16px; /* Увеличиваем для удобства касания */
         }
-        
         /* Убираем сложные эффекты для старых устройств */
         .product-item {
             border-left: 4px solid var(--primary-color);
@@ -173,7 +153,6 @@
             <span class="navbar-brand mb-0 h1"><i class="fas fa-cubes me-2"></i>Инвентаризация</span>
         </div>
     </nav>
-
     <!-- Предупреждение о HTTPS -->
     <div class="container">
         <div id="httpsWarning" class="https-warning" style="display: none;">
@@ -181,12 +160,10 @@
             <strong>Внимание:</strong> Страница загружена по HTTPS. Для работы с WebSocket используйте WSS (Secure WebSocket) или загрузите страницу по HTTP.
         </div>
     </div>
-
     <!-- Статус подключения -->
     <div id="connectionStatus" class="connection-status disconnected">
         <i class="fas fa-plug me-1"></i>Нет подключения
     </div>
-
     <div class="container">
         <!-- Главный экран -->
         <div id="main-screen" class="screen-visible">
@@ -209,7 +186,6 @@
                     </div>
                 </div>
             </div>
-            
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">Выбор склада</h5>
@@ -221,7 +197,6 @@
                     </select>
                 </div>
             </div>
-            
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">Настройки подключения</h5>
@@ -246,13 +221,11 @@
                     </button>
                 </div>
             </div>
-            
             <div class="d-grid gap-2 mb-4">
                 <button class="btn btn-primary btn-lg" id="startInventory">
                     <i class="fas fa-play-circle me-2"></i>Начать инвентаризацию
                 </button>
             </div>
-            
             <!-- Кнопка для тестирования совместимости -->
             <div class="card mb-4">
                 <div class="card-header">
@@ -266,7 +239,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Экран сканирования -->
         <div id="scan-screen" class="screen-hidden">
             <ul class="nav nav-tabs mb-4" id="scanTabs" role="tablist">
@@ -282,7 +254,6 @@
                     </button>
                 </li>
             </ul>
-            
             <div class="tab-content" id="scanTabContent">
                 <!-- Вкладка сканирования -->
                 <div class="tab-pane fade show active" id="scan" role="tabpanel">
@@ -295,7 +266,6 @@
                                 <label for="barcodeInput" class="form-label">Штрих-код товара</label>
                                 <input type="text" class="form-control" id="barcodeInput" placeholder="Введите штрих-код" autocomplete="off">
                             </div>
-                            
                             <div class="mb-3">
                                 <label for="quantityInput" class="form-label">Добавить количество (по умолчанию +1)</label>
                                 <div class="input-group">
@@ -304,11 +274,9 @@
                                     <button class="btn btn-outline-secondary quantity-btn" type="button" id="increaseQuantity">+</button>
                                 </div>
                             </div>
-                            
                             <button class="btn btn-success w-100" id="addQuantity">
                                 <i class="fas fa-plus-circle me-2"></i>Добавить количество
                             </button>
-                            
                             <div id="product-info" class="mt-4 screen-hidden">
                                 <h5>Информация о товаре</h5>
                                 <div class="product-info-content p-3 bg-light rounded"></div>
@@ -316,7 +284,6 @@
                         </div>
                     </div>
                 </div>
-                
                 <!-- Вкладка отсканированного -->
                 <div class="tab-pane fade" id="scanned" role="tabpanel">
                     <div class="card">
@@ -339,18 +306,15 @@
                     </div>
                 </div>
             </div>
-            
             <button class="btn btn-danger back-button" id="back-button" title="Назад">
                 <i class="fas fa-arrow-left"></i>
             </button>
         </div>
     </div>
-
     <!-- Панель отладки -->
     <div class="debug-panel" id="debug-panel">
         <strong>Отладка:</strong> <span id="debug-info">Готов к работе</span>
     </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Полифиллы для старых браузеров
@@ -361,7 +325,6 @@
                 warn: function() {}
             };
         }
-        
         if (!Array.prototype.find) {
             Array.prototype.find = function(predicate) {
                 for (var i = 0; i < this.length; i++) {
@@ -372,7 +335,6 @@
                 return undefined;
             };
         }
-        
         if (!Array.prototype.findIndex) {
             Array.prototype.findIndex = function(predicate) {
                 for (var i = 0; i < this.length; i++) {
@@ -383,14 +345,12 @@
                 return -1;
             };
         }
-        
         if (!String.prototype.startsWith) {
             String.prototype.startsWith = function(searchString, position) {
                 position = position || 0;
                 return this.indexOf(searchString, position) === position;
             };
         }
-        
         // Инициализация данных
         var scannedItems = [];
         var currentProduct = null;
@@ -400,7 +360,6 @@
         var wsReconnectAttempts = 0;
         var MAX_RECONNECT_ATTEMPTS = 10;
         var RECONNECT_DELAYS = [1000, 2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000];
-
         // Демо-данные номенклатуры
         var nomenclature = [
             { id: 1, code: '100001', barcode: '4601234567890', name: 'Смартфон Samsung Galaxy S21', stock: { 'ТВЗ': 50, 'Электромаркет': 25 }, reserved: 5, location: 'Секция A-1' },
@@ -409,7 +368,6 @@
             { id: 4, code: '100004', barcode: '4601234567893', name: 'Планшет Apple iPad Air', stock: { 'ТВЗ': 15, 'Электромаркет': 8 }, reserved: 1, location: 'Секция D-4' },
             { id: 5, code: '100005', barcode: '4601234567894', name: 'Умные часы Apple Watch Series 7', stock: { 'ТВЗ': 25, 'Электромаркет': 12 }, reserved: 4, location: 'Секция E-5' }
         ];
-
         // Элементы DOM
         var mainScreen = document.getElementById('main-screen');
         var scanScreen = document.getElementById('scan-screen');
@@ -433,13 +391,11 @@
         var httpsWarning = document.getElementById('httpsWarning');
         var testCompatibilityBtn = document.getElementById('testCompatibility');
         var compatibilityResults = document.getElementById('compatibilityResults');
-
         // Проверяем, загружена ли страница по HTTPS
         if (window.location.protocol === 'https:') {
             httpsWarning.style.display = 'block';
             useSecureProtocol.checked = true;
         }
-
         // Функция для отладки
         function debugLog(message) {
             var timestamp = new Date().toISOString().slice(11, 23);
@@ -448,11 +404,9 @@
             debugPanel.style.display = 'block';
             console.log(fullMessage);
         }
-
         // Обновление статуса подключения
         function updateConnectionStatus(status) {
             connectionStatus.className = 'connection-status ' + status;
-            
             if (status === 'connected') {
                 connectionStatus.innerHTML = '<i class="fas fa-plug me-1"></i>Подключено';
             } else if (status === 'connecting') {
@@ -461,14 +415,11 @@
                 connectionStatus.innerHTML = '<i class="fas fa-plug me-1"></i>Нет подключения';
             }
         }
-
         // Инициализация при загрузке
         document.addEventListener('DOMContentLoaded', function() {
             debugLog('Документ загружен, инициализация приложения');
-            
             // Загрузка сохраненных данных
             loadSavedData();
-            
             // Обработчики событий
             document.getElementById('startInventory').addEventListener('click', startInventory);
             document.getElementById('back-button').addEventListener('click', backToMain);
@@ -477,7 +428,6 @@
             document.getElementById('exportNetwork').addEventListener('click', exportViaWebSocket);
             testConnectionBtn.addEventListener('click', testConnection);
             testCompatibilityBtn.addEventListener('click', testCompatibility);
-            
             // Обработчики для поля штрих-кода
             barcodeInput.addEventListener('change', processBarcode);
             barcodeInput.addEventListener('keypress', function(e) {
@@ -485,7 +435,6 @@
                     processBarcode();
                 }
             });
-            
             // Обработчики для управления количеством
             decreaseQuantityBtn.addEventListener('click', function() {
                 var currentValue = parseInt(quantityInput.value) || 1;
@@ -493,82 +442,68 @@
                     quantityInput.value = currentValue - 1;
                 }
             });
-            
             increaseQuantityBtn.addEventListener('click', function() {
                 var currentValue = parseInt(quantityInput.value) || 1;
                 quantityInput.value = currentValue + 1;
             });
-            
             quantityInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     addQuantity();
                 }
             });
-            
             // Автоматическое подключение при загрузке, если есть сохраненные настройки
             var savedServerIp = localStorage.getItem('serverIp');
             if (savedServerIp) {
                 setTimeout(connectWebSocket, 1000);
             }
-            
             debugLog('Инициализация завершена');
         });
-
         // Функция проверки совместимости
         function testCompatibility() {
             var results = [];
-            
             // Проверка WebSocket
             if (window.WebSocket) {
                 results.push('WebSocket: поддерживается');
             } else {
                 results.push('WebSocket: НЕ поддерживается');
             }
-            
             // Проверка localStorage
             if (typeof(Storage) !== "undefined") {
                 results.push('localStorage: поддерживается');
             } else {
                 results.push('localStorage: НЕ поддерживается');
             }
-            
             // Проверка современных функций JS
             if (typeof Array.prototype.find === 'function') {
                 results.push('Array.find(): поддерживается');
             } else {
                 results.push('Array.find(): НЕ поддерживается (используется полифилл)');
             }
-            
             // Проверка Flexbox
             if (typeof document.body.style.flex !== 'undefined') {
                 results.push('Flexbox: поддерживается');
             } else {
                 results.push('Flexbox: НЕ поддерживается');
             }
-            
             // Проверка Fetch API
             if (window.fetch) {
                 results.push('Fetch API: поддерживается');
             } else {
                 results.push('Fetch API: НЕ поддерживается');
             }
-            
             // Проверка Promise
             if (window.Promise) {
                 results.push('Promise: поддерживается');
             } else {
                 results.push('Promise: НЕ поддерживается');
             }
-            
             // Вывод результатов
             compatibilityResults.innerHTML = '<ul>' + results.map(function(r) {
                 return '<li>' + r + '</li>';
             }).join('') + '</ul>';
             compatibilityResults.style.display = 'block';
-            
             debugLog('Проверка совместимости завершена: ' + results.length + ' тестов');
         }
-
         function loadSavedData() {
             try {
                 var savedData = localStorage.getItem('scannedItems');
@@ -576,64 +511,51 @@
                 var savedServerIp = localStorage.getItem('serverIp');
                 var savedServerPort = localStorage.getItem('serverPort');
                 var savedUseSecure = localStorage.getItem('useSecureProtocol');
-                
                 if (savedData) {
                     scannedItems = JSON.parse(savedData);
                     updateScannedList();
                 }
-                
                 if (savedWarehouse) {
                     warehouseSelect.value = savedWarehouse;
                     selectedWarehouse = savedWarehouse;
                 }
-                
                 if (savedServerIp) {
                     serverIpInput.value = savedServerIp;
                 }
-                
                 if (savedServerPort) {
                     serverPortInput.value = savedServerPort;
                 }
-                
                 if (savedUseSecure) {
                     useSecureProtocol.checked = savedUseSecure === 'true';
                 }
-                
                 debugLog('Данные загружены из localStorage');
             } catch (e) {
                 debugLog('Ошибка при загрузке данных: ' + e.message);
             }
         }
-
         function testConnection() {
             var ip = serverIpInput.value.trim();
             var port = serverPortInput.value.trim();
             var useSecure = useSecureProtocol.checked;
-            
             if (!ip) {
                 alert('Введите IP-адрес сервера');
                 return;
             }
-            
             localStorage.setItem('serverIp', ip);
             localStorage.setItem('serverPort', port);
             localStorage.setItem('useSecureProtocol', useSecure);
-            
             // Закрыть существующее соединение
             if (ws) {
                 ws.close();
                 ws = null;
             }
-            
             // Попробовать подключиться
             connectWebSocket();
         }
-
         function connectWebSocket() {
             var serverIp = localStorage.getItem('serverIp');
             var serverPort = localStorage.getItem('serverPort') || '8765';
             var useSecure = localStorage.getItem('useSecureProtocol') === 'true';
-            
             if (!serverIp) {
                 serverIp = prompt('Введите IP-адрес сервера для WebSocket:', '10.7.0.78');
                 if (serverIp) {
@@ -644,42 +566,33 @@
                     return;
                 }
             }
-
             // Определяем протокол подключения
             var protocol = useSecure ? 'wss' : 'ws';
             var wsUrl = protocol + '://' + serverIp + ':' + serverPort;
-            
             debugLog('Попытка подключения к WebSocket: ' + wsUrl);
             updateConnectionStatus('connecting');
-            
             try {
                 ws = new WebSocket(wsUrl);
-                
                 ws.onopen = function() {
                     wsReconnectAttempts = 0;
                     debugLog('WebSocket соединение установлено');
                     showNotification('Подключено к серверу');
                     updateConnectionStatus('connected');
                 };
-                
                 ws.onmessage = function(event) {
                     debugLog('Получено сообщение от сервера: ' + event.data);
                 };
-                
                 ws.onerror = function(error) {
                     debugLog('Ошибка WebSocket: ' + JSON.stringify(error));
                     showNotification('Ошибка подключения к серверу');
                     updateConnectionStatus('disconnected');
                 };
-                
                 ws.onclose = function(event) {
                     debugLog('WebSocket закрыт. Код: ' + event.code + ', причина: ' + event.reason);
                     updateConnectionStatus('disconnected');
-                    
                     if (wsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                         var delay = RECONNECT_DELAYS[wsReconnectAttempts] || 5000;
                         wsReconnectAttempts++;
-                        
                         debugLog('Попытка переподключения (' + wsReconnectAttempts + '/' + MAX_RECONNECT_ATTEMPTS + ') через ' + delay + 'ms');
                         setTimeout(connectWebSocket, delay);
                     } else {
@@ -693,52 +606,37 @@
                 updateConnectionStatus('disconnected');
             }
         }
-
         function startInventory() {
             debugLog('Нажата кнопка "Начать инвентаризацию"');
-            
             // Сохранение выбранного склада
             selectedWarehouse = warehouseSelect.value;
             localStorage.setItem('selectedWarehouse', selectedWarehouse);
-            
             // Переключение экранов
             mainScreen.classList.remove('screen-visible');
             mainScreen.classList.add('screen-hidden');
-            
             scanScreen.classList.remove('screen-hidden');
             scanScreen.classList.add('screen-visible');
-            
             debugLog('Переключение экранов: главный -> сканирование');
-            
             // Фокус на поле ввода штрих-кода
             barcodeInput.focus();
         }
-
         function backToMain() {
             debugLog('Нажата кнопка "Назад"');
-            
             // Переключение экранов
             scanScreen.classList.remove('screen-visible');
             scanScreen.classList.add('screen-hidden');
-            
             mainScreen.classList.remove('screen-hidden');
             mainScreen.classList.add('screen-visible');
-            
             debugLog('Переключение экранов: сканирование -> главный');
         }
-
         function processBarcode() {
             // Сбрасываем режим редактирования при новом сканировании
             isInEditMode = false;
-            
             var barcode = barcodeInput.value.trim();
             if (!barcode) return;
-            
             debugLog('Обработка штрих-кода: ' + barcode);
-            
             // Поиск товара в номенклатуре
             var product = findProductByBarcode(barcode);
-            
             if (product) {
                 displayProductInfo(product);
                 currentProduct = product;
@@ -760,12 +658,10 @@
                 // Автоматически добавляем товар с количеством 1
                 addScannedItem(1);
             }
-            
             barcodeInput.value = '';
             // Фокус остается на поле ввода штрих-кода для следующего сканирования
             barcodeInput.focus();
         }
-
         function findProductByBarcode(barcode) {
             for (var i = 0; i < nomenclature.length; i++) {
                 if (nomenclature[i].barcode === barcode) {
@@ -774,10 +670,8 @@
             }
             return null;
         }
-
         function displayProductInfo(product) {
             var quantity = getCurrentQuantity(product);
-            
             productInfoContent.innerHTML = [
                 '<p><strong>Код:</strong> ' + product.code + '</p>',
                 '<p><strong>Наименование:</strong> ' + product.name + '</p>',
@@ -787,13 +681,10 @@
                 '<p><strong>Место хранения:</strong> ' + product.location + '</p>',
                 '<p><strong>Текущее количество:</strong> ' + quantity + '</p>'
             ].join('');
-            
             productInfo.classList.remove('screen-hidden');
             productInfo.classList.add('screen-visible');
-            
             debugLog('Отображение информации о товаре: ' + product.name);
         }
-
         function getCurrentQuantity(product) {
             for (var i = 0; i < scannedItems.length; i++) {
                 if (scannedItems[i].barcode === product.barcode) {
@@ -802,15 +693,12 @@
             }
             return 0;
         }
-
         function addScannedItem(quantity) {
             if (!currentProduct) {
                 alert('Сначала отсканируйте товар');
                 return;
             }
-            
             debugLog('Добавление количества: ' + quantity + ' для товара ' + currentProduct.name);
-            
             // Проверяем, есть ли уже такой товар в отсканированных
             var existingIndex = -1;
             for (var i = 0; i < scannedItems.length; i++) {
@@ -819,7 +707,6 @@
                     break;
                 }
             }
-            
             if (existingIndex !== -1) {
                 // Добавляем количество к существующей записи
                 scannedItems[existingIndex].quantity += quantity;
@@ -835,25 +722,20 @@
                     location: currentProduct.location
                 });
             }
-            
             // Сохранение данных
             localStorage.setItem('scannedItems', JSON.stringify(scannedItems));
-            
             // Обновление отображения
             updateScannedList();
             displayProductInfo(currentProduct);
-            
             // Показать уведомление
             showNotification('Добавлено ' + quantity + ' единиц товара "' + currentProduct.name + '"');
         }
-
         function addQuantity() {
             if (!currentProduct) {
                 alert('Сначала отсканируйте товар');
                 barcodeInput.focus();
                 return;
             }
-            
             var quantity = parseInt(quantityInput.value) || 1;
             if (quantity <= 0) {
                 alert('Количество должно быть положительным числом');
@@ -861,7 +743,6 @@
                 quantityInput.select();
                 return;
             }
-            
             if (isInEditMode) {
                 // Режим редактирования — заменяем количество
                 var existingIndex = -1;
@@ -886,22 +767,18 @@
                 // Обычный режим — добавляем количество
                 addScannedItem(quantity);
             }
-            
             // Сброс поля количества
             quantityInput.value = '1';
             // Фокус на поле штрих-кода
             barcodeInput.focus();
         }
-
         function updateScannedList() {
             if (scannedItems.length === 0) {
                 scannedItemsList.innerHTML = '<p class="text-center text-muted mt-3">Нет отсканированных товаров</p>';
                 scannedCount.textContent = '0';
                 return;
             }
-            
             scannedCount.textContent = scannedItems.length;
-            
             var html = '';
             for (var i = 0; i < scannedItems.length; i++) {
                 var item = scannedItems[i];
@@ -926,9 +803,7 @@
                     '</div>'
                 ].join('');
             }
-            
             scannedItemsList.innerHTML = html;
-            
             // Добавляем обработчики для кнопок удаления
             var deleteButtons = document.querySelectorAll('.delete-item');
             for (var j = 0; j < deleteButtons.length; j++) {
@@ -937,7 +812,6 @@
                     deleteItem(barcode);
                 });
             }
-            
             // Добавляем обработчики для кнопок редактирования
             var editButtons = document.querySelectorAll('.edit-item');
             for (var k = 0; k < editButtons.length; k++) {
@@ -946,27 +820,22 @@
                     editItem(barcode);
                 });
             }
-            
             debugLog('Список отсканированных товаров обновлен: ' + scannedItems.length + ' позиций');
         }
-
         function deleteItem(barcode) {
             scannedItems = scannedItems.filter(function(item) {
                 return item.barcode !== barcode;
             });
             localStorage.setItem('scannedItems', JSON.stringify(scannedItems));
             updateScannedList();
-            
             if (currentProduct && currentProduct.barcode === barcode) {
                 productInfo.classList.remove('screen-visible');
                 productInfo.classList.add('screen-hidden');
                 currentProduct = null;
             }
-            
             showNotification('Товар удален из списка');
             debugLog('Товар удален: ' + barcode);
         }
-
         function editItem(barcode) {
             var item = null;
             for (var i = 0; i < scannedItems.length; i++) {
@@ -976,60 +845,51 @@
                 }
             }
             if (!item) return;
-            
             // Находим товар в номенклатуре или используем данные из отсканированных
             var product = findProductByBarcode(barcode) || item;
-            
             // Устанавливаем как текущий товар
             currentProduct = product;
             displayProductInfo(product);
-            
             // Устанавливаем текущее количество
             quantityInput.value = item.quantity;
-            
             // Включаем режим редактирования
             isInEditMode = true;
-            
             // Переключаемся на вкладка сканирования
             document.getElementById('scan-tab').click();
-            
             // Фокус на поле количества
             quantityInput.focus();
             quantityInput.select();
-            
             showNotification('Редактирование товара: ' + product.name);
             debugLog('Редактирование товара: ' + barcode);
         }
-
         function exportToCSV() {
-    if (scannedItems.length === 0) {
-        alert('Нет данных для экспорта');
-        return;
-    }
-    debugLog('Экспорт данных в CSV');
-    // Добавляем BOM для правильного отображения кириллицы в Excel (опционально, т.к. данных кириллицы теперь нет)
-    var BOM = "\uFEFF";
-    // Создание CSV содержимого в формате "штрихкодgколичество"
-    var csvContent = BOM; // Начинаем с BOM
-    for (var i = 0; i < scannedItems.length; i++) {
-        var item = scannedItems[i];
-        csvContent += item.barcode + 'g' + item.quantity + '
+            if (scannedItems.length === 0) {
+                alert('Нет данных для экспорта');
+                return;
+            }
+            debugLog('Экспорт данных в CSV');
+            // Добавляем BOM для правильного отображения кириллицы в Excel (опционально, т.к. данных кириллицы теперь нет)
+            var BOM = "\uFEFF";
+            // Создание CSV содержимого в формате "штрихкодgколичество"
+            var csvContent = BOM; // Начинаем с BOM
+            for (var i = 0; i < scannedItems.length; i++) {
+                var item = scannedItems[i];
+                csvContent += item.barcode + 'g' + item.quantity + '
 ';
-    }
-    // Создание и скачивание файла
-    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement("a");
-    var date = new Date().toISOString().slice(0, 10);
-    link.setAttribute("href", url);
-    link.setAttribute("download", "инвентаризация_" + date + ".csv");
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showNotification('Данные экспортированы в CSV');
-}
-
+            }
+            // Создание и скачивание файла
+            var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement("a");
+            var date = new Date().toISOString().slice(0, 10);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "инвентаризация_" + date + ".csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showNotification('Данные экспортированы в CSV');
+        }
         function exportViaWebSocket() {
             if (!ws || ws.readyState !== WebSocket.OPEN) {
                 var reconnect = confirm('Нет подключения к серверу. Попробовать переподключиться?');
@@ -1041,26 +901,22 @@
                 debugLog('Попытка экспорта без активного WebSocket-соединения');
                 return;
             }
-            
             if (scannedItems.length === 0) {
                 alert('Нет данных для экспорта');
                 return;
             }
-
             debugLog('Подготовка данных для экспорта через WebSocket...');
-
             try {
                 // Отправляем данные по одному товару за раз с задержкой
                 var i = 0;
                 function sendNext() {
                     if (i < scannedItems.length) {
                         var item = scannedItems[i];
-                        var data = item.barcode + 'g' + item.quantity + '\n';
+                        var data = item.barcode + 'g' + item.quantity + '
+';
                         debugLog('Отправка: ' + data);
-                        
                         ws.send(data);
                         i++;
-                        
                         // Ждем немного перед отправкой следующего товара
                         setTimeout(sendNext, 100);
                     } else {
@@ -1068,28 +924,27 @@
                         showNotification('Данные успешно отправлены через WebSocket!');
                     }
                 }
-                
                 sendNext();
             } catch (err) {
                 var errorMessage = err.message || 'Неизвестная ошибка сети';
                 debugLog('Ошибка WebSocket: ' + errorMessage);
-                alert('Ошибка отправки через WebSocket:\n' + errorMessage + '\n\nПроверьте:\n1. Запущен ли WebSocket-сервер\n2. Доступен ли IP в сети');
+                alert('Ошибка отправки через WebSocket:
+' + errorMessage + '
+Проверьте:
+1. Запущен ли WebSocket-сервер
+2. Доступен ли IP в сети');
             }
         }
-
         function showNotification(message) {
             // Создаем элемент уведомления
             var notification = document.createElement('div');
             notification.className = 'notification';
             notification.textContent = message;
-            
             document.body.appendChild(notification);
-            
             // Показываем уведомление
             setTimeout(function() {
                 notification.classList.add('show');
             }, 10);
-            
             // Удаляем уведомление через 3 секунды
             setTimeout(function() {
                 notification.classList.remove('show');
@@ -1097,7 +952,6 @@
                     notification.remove();
                 }, 300);
             }, 3000);
-            
             debugLog('Показано уведомление: ' + message);
         }
     </script>
