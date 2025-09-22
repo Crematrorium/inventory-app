@@ -226,6 +226,16 @@
             font-size: 18px;
             font-weight: bold;
         }
+        
+        .auto-add-badge {
+            background-color: var(--success-color);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 10px;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -272,20 +282,23 @@
                         <div class="card-body">
                             <div class="mb-3">
                                 <label for="barcodeInput" class="form-label">Штрих-код товара</label>
-                                <input type="text" class="form-control" id="barcodeInput" placeholder="Введите штрих-код">
+                                <input type="text" class="form-control" id="barcodeInput" placeholder="Введите штрих-код или наведите сканер">
+                                <div class="auto-add-badge">
+                                    <i class="fas fa-bolt me-1"></i>Автоматически добавляется 1 единица
+                                </div>
                             </div>
                             
                             <div class="mb-3">
-                                <label for="quantityInput" class="form-label">Добавить количество (по умолчанию +1)</label>
+                                <label for="quantityInput" class="form-label">Дополнительное количество</label>
                                 <div class="input-group">
                                     <button class="btn btn-outline-secondary quantity-btn" type="button" id="decreaseQuantity">-</button>
-                                    <input type="number" class="form-control text-center" id="quantityInput" min="1" value="1">
+                                    <input type="number" class="form-control text-center" id="quantityInput" min="0" value="0">
                                     <button class="btn btn-outline-secondary quantity-btn" type="button" id="increaseQuantity">+</button>
                                 </div>
                             </div>
                             
                             <button class="btn btn-success w-100" id="addQuantity">
-                                <i class="fas fa-plus-circle me-2"></i>Добавить количество
+                                <i class="fas fa-plus-circle me-2"></i>Добавить дополнительное количество
                             </button>
                             
                             <div id="product-info" class="mt-4 screen-hidden">
@@ -390,14 +403,14 @@
             
             // Обработчики для управления количеством
             decreaseQuantityBtn.addEventListener('click', function() {
-                const currentValue = parseInt(quantityInput.value) || 1;
-                if (currentValue > 1) {
+                const currentValue = parseInt(quantityInput.value) || 0;
+                if (currentValue > 0) {
                     quantityInput.value = currentValue - 1;
                 }
             });
             
             increaseQuantityBtn.addEventListener('click', function() {
-                const currentValue = parseInt(quantityInput.value) || 1;
+                const currentValue = parseInt(quantityInput.value) || 0;
                 quantityInput.value = currentValue + 1;
             });
             
@@ -487,6 +500,9 @@
             }
             
             barcodeInput.value = '';
+            // Сбрасываем дополнительное количество
+            quantityInput.value = '0';
+            
             // Фокус остается на поле ввода штрих-кода для следующего сканирования
             barcodeInput.focus();
         }
@@ -518,6 +534,11 @@
         function addScannedItem(quantity) {
             if (!currentProduct) {
                 alert('Сначала отсканируйте товар');
+                return;
+            }
+            
+            if (quantity <= 0) {
+                debugLog('Попытка добавить неположительное количество: ' + quantity);
                 return;
             }
             
@@ -558,9 +579,9 @@
                 return;
             }
             
-            const quantity = parseInt(quantityInput.value) || 1;
+            const quantity = parseInt(quantityInput.value) || 0;
             if (quantity <= 0) {
-                alert('Количество должно быть положительным числом');
+                alert('Дополнительное количество должно быть положительным числом');
                 quantityInput.focus();
                 quantityInput.select();
                 return;
@@ -581,12 +602,12 @@
                 isInEditMode = false;
                 currentProduct = null;
             } else {
-                // Обычный режим — добавляем количество
+                // Обычный режим — добавляем дополнительное количество
                 addScannedItem(quantity);
             }
             
-            // Сброс поля количества
-            quantityInput.value = '1';
+            // Сброс поля дополнительного количества
+            quantityInput.value = '0';
             // Фокус на поле штрих-кода
             barcodeInput.focus();
         }
