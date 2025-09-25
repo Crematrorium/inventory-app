@@ -42,6 +42,22 @@
 let items = [];
 let lastScanned = null;
 
+function saveItems() {
+  localStorage.setItem('inventoryItems', JSON.stringify(items));
+}
+
+function loadItems() {
+  const saved = localStorage.getItem('inventoryItems');
+  if (saved) {
+    try {
+      items = JSON.parse(saved);
+      refreshTable();
+    } catch(e) {
+      console.error('Ошибка парсинга данных из localStorage', e);
+    }
+  }
+}
+
 function refreshTable() {
   const tbody = document.getElementById('itemsTableBody');
   tbody.innerHTML = '';
@@ -54,22 +70,24 @@ function refreshTable() {
     `;
     tbody.appendChild(tr);
   });
-  // Логика редактирования количества
+
   document.querySelectorAll('.editQty').forEach(input => {
     input.addEventListener('change', e => {
       const i = e.target.dataset.index;
       const val = parseInt(e.target.value);
       if(val > 0) {
         items[i].qty = val;
+        saveItems();
       }
       refreshTable();
     });
   });
-  // Логика удаления
+
   document.querySelectorAll('.deleteBtn').forEach(btn => {
     btn.addEventListener('click', e => {
       const i = e.target.dataset.index;
       items.splice(i, 1);
+      saveItems();
       refreshTable();
     });
   });
@@ -84,6 +102,7 @@ function addOrIncreaseItem(code, qty = 1) {
     items.push({code: code, qty: qty});
   }
   lastScanned = code;
+  saveItems();
   refreshTable();
 }
 
@@ -153,8 +172,6 @@ async function sendOverBluetooth() {
 
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
-// --- QuaggaJS интеграция для сканирования камеры ---
-
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
@@ -166,7 +183,7 @@ startScanBtn.addEventListener('click', () => {
       type : "LiveStream",
       target: scannerContainer,
       constraints: {
-        facingMode: "environment" // основная камера
+        facingMode: "environment"
       }
     },
     decoder : {
@@ -190,6 +207,12 @@ startScanBtn.addEventListener('click', () => {
     if (!result || !result.codeResult || !result.codeResult.code) return;
     const code = result.codeResult.code;
     addOrIncreaseItem(code, 1);
+
+    // Остановить сканирование после одного распознавания
+    Quagga.stop();
+    scannerContainer.innerHTML = '';
+    startScanBtn.disabled = false;
+    stopScanBtn.disabled = true;
   });
 });
 
@@ -200,7 +223,7 @@ stopScanBtn.addEventListener('click', () => {
   stopScanBtn.disabled = true;
 });
 
-refreshTable();
+loadItems();
 
 </script>
 </body>
