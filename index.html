@@ -9,6 +9,7 @@
   input, button { font-size: 1em; padding: 6px; margin: 5px 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  #scannerContainer { width: 100%; max-width: 400px; height: 300px; border: 1px solid #ccc; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -29,6 +30,14 @@
 <button id="exportCsvBtn">Экспорт в CSV</button>
 <button id="sendBluetoothBtn">Отправить по Bluetooth</button>
 
+<hr>
+
+<h3>Сканирование камеры</h3>
+<button id="startScan">Начать сканирование</button>
+<button id="stopScan" disabled>Остановить сканирование</button>
+<div id="scannerContainer"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 <script>
 let items = [];
 let lastScanned = null;
@@ -45,7 +54,7 @@ function refreshTable() {
     `;
     tbody.appendChild(tr);
   });
-  // Attach listeners for edits and deletes
+  // Логика редактирования количества
   document.querySelectorAll('.editQty').forEach(input => {
     input.addEventListener('change', e => {
       const i = e.target.dataset.index;
@@ -56,6 +65,7 @@ function refreshTable() {
       refreshTable();
     });
   });
+  // Логика удаления
   document.querySelectorAll('.deleteBtn').forEach(btn => {
     btn.addEventListener('click', e => {
       const i = e.target.dataset.index;
@@ -65,21 +75,24 @@ function refreshTable() {
   });
 }
 
+function addOrIncreaseItem(code, qty = 1) {
+  if (!code) return;
+  let existing = items.find(item => item.code === code);
+  if(existing) {
+    existing.qty += qty;
+  } else {
+    items.push({code: code, qty: qty});
+  }
+  lastScanned = code;
+  refreshTable();
+}
+
 document.getElementById('barcodeInput').addEventListener('keydown', function(e) {
   if(e.key === 'Enter') {
     const code = e.target.value.trim();
     if(!code) return;
-
-    // Поиск уже существующего кода
-    let existing = items.find(item => item.code === code);
-    if(existing) {
-      existing.qty += 1; // прибавить 1
-    } else {
-      items.push({code: code, qty: 1});
-    }
-    lastScanned = code;
+    addOrIncreaseItem(code, 1);
     e.target.value = '';
-    refreshTable();
   }
 });
 
@@ -87,11 +100,7 @@ document.getElementById('addQtyBtn').addEventListener('click', () => {
   if(lastScanned) {
     const qty = parseInt(document.getElementById('qtyToAdd').value);
     if(qty > 0) {
-      let item = items.find(i => i.code === lastScanned);
-      if(item) {
-        item.qty += qty;
-        refreshTable();
-      }
+      addOrIncreaseItem(lastScanned, qty);
     }
   } else {
     alert('Нет последнего отсканированного кода');
@@ -99,11 +108,10 @@ document.getElementById('addQtyBtn').addEventListener('click', () => {
 });
 
 document.getElementById('exportCsvBtn').addEventListener('click', () => {
- let csvContent = '';
-items.forEach(i => {
-  csvContent += `${i.code}g${i.qty}\n`;
-});
-
+  let csvContent = '';
+  items.forEach(i => {
+    csvContent += `${i.code}h${i.qty}\n`;
+  });
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -113,8 +121,6 @@ items.forEach(i => {
   URL.revokeObjectURL(url);
 });
 
-// Функция отправки по Bluetooth реализуется с использованием Web Bluetooth API
-// Но Android 6.0.1 имеет ограниченную поддержку, может понадобиться адаптация под конкретные устройства
 async function sendOverBluetooth() {
   if (!navigator.bluetooth) {
     alert('Bluetooth не поддерживается в этом браузере');
@@ -123,7 +129,7 @@ async function sendOverBluetooth() {
   try {
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
-      optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'] // Serial Port Service UUID (пример)
+      optionalServices: ['00001101-0000-1000-8000-00805f9b34fb']
     });
 
     const server = await device.gatt.connect();
@@ -132,7 +138,7 @@ async function sendOverBluetooth() {
 
     let csvContent = '';
     items.forEach(i => {
-      csvContent += `${i.code};${i.qty}\n`;
+      csvContent += `${i.code}h${i.qty}\n`;
     });
     const encoder = new TextEncoder();
     const data = encoder.encode(csvContent);
@@ -147,7 +153,55 @@ async function sendOverBluetooth() {
 
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
+// --- QuaggaJS интеграция для сканирования камеры ---
+
+const startScanBtn = document.getElementById('startScan');
+const stopScanBtn = document.getElementById('stopScan');
+const scannerContainer = document.getElementById('scannerContainer');
+
+startScanBtn.addEventListener('click', () => {
+  Quagga.init({
+    inputStream : {
+      name : "Live",
+      type : "LiveStream",
+      target: scannerContainer,
+      constraints: {
+        facingMode: "environment" // основная камера
+      }
+    },
+    decoder : {
+      readers : ["code_128_reader","ean_reader","ean_8_reader","code_39_reader","upc_reader"]
+    },
+    locate: true,
+    numOfWorkers: navigator.hardwareConcurrency || 4,
+    frequency: 5,
+  }, function(err) {
+      if (err) {
+          console.error(err);
+          alert('Ошибка инициализации камеры: ' + err);
+          return;
+      }
+      Quagga.start();
+      startScanBtn.disabled = true;
+      stopScanBtn.disabled = false;
+  });
+
+  Quagga.onDetected(function(result) {
+    if (!result || !result.codeResult || !result.codeResult.code) return;
+    const code = result.codeResult.code;
+    addOrIncreaseItem(code, 1);
+  });
+});
+
+stopScanBtn.addEventListener('click', () => {
+  Quagga.stop();
+  scannerContainer.innerHTML = '';
+  startScanBtn.disabled = false;
+  stopScanBtn.disabled = true;
+});
+
 refreshTable();
+
 </script>
 </body>
 </html>
