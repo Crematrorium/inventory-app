@@ -227,15 +227,30 @@ startScanBtn.addEventListener('click', () => {
     scanPaused = false;
     startScanBtn.disabled = true;
     stopScanBtn.disabled = false;
+    startScanBtn.textContent = 'Сканирование...';
   });
 
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
-    if (!result.box || !result.line) return;
     if (scanPaused) return;
 
     const code = result.codeResult.code.trim();
     if (!code) return;
+
+    // Улучшенная проверка на валидность штрихкода
+    const confidence = result.codeResult.confidence || 0;
+    
+    // Проверяем confidence (уверенность распознавания) - должен быть достаточно высоким
+    if (confidence < 30) return;
+    
+    // Проверяем длину штрихкода (обычно штрихкоды имеют длину от 8 символов)
+    if (code.length < 5) return;
+    
+    // Проверяем, что штрихкод содержит только допустимые символы
+    if (!/^[0-9a-zA-Z\-]+$/.test(code)) return;
+    
+    // Проверяем, что есть bounding box (ограничивающая рамка)
+    if (!result.box || result.box.length < 4) return;
 
     // Добавляем код с количеством 1
     addOrIncreaseItem(code, 1);
