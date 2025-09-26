@@ -5,7 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Инвентаризация</title>
 <style>
-  body { font-family: Arial, sans-serif; margin: 20px; }
+  body { 
+    font-family: Arial, sans-serif; 
+    margin: 20px; 
+    max-width: 1000px; 
+    margin-left: auto; 
+    margin-right: auto; 
+    overflow-x: hidden; 
+  }
   input, button { font-size: 1em; padding: 6px; margin: 5px 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
@@ -206,6 +213,7 @@ startScanBtn.addEventListener('click', () => {
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
     const code = result.codeResult.code;
+    // Всегда добавляем 1 при сканировании камерой
     addOrIncreaseItem(code, 1);
 
     // Остановить сканирование после одного распознавания
