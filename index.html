@@ -228,13 +228,13 @@ startScanBtn.addEventListener('click', async () => {
 
   try {
     // Запрашиваем доступ к камере
-    videoStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "environment",
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      }
-    });
+   videoStream = await navigator.mediaDevices.getUserMedia({
+  video: {
+    facingMode: "user", // ✅ Фронтальная камера — работает
+    width: { ideal: 1280 },
+    height: { ideal: 720 }
+  }
+});
 
     // Привязываем поток к видео
     scannerVideo.srcObject = videoStream;
