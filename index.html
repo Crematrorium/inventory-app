@@ -10,6 +10,7 @@
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
   #scannerContainer { width: 100%; max-width: 400px; height: 300px; border: 1px solid #ccc; margin-top: 10px; }
+  .debug-info { margin-top: 10px; font-size: 0.9em; color: #666; }
 </style>
 </head>
 <body>
@@ -35,7 +36,9 @@
 <h3>Сканирование камеры</h3>
 <button id="startScan">Начать сканирование</button>
 <button id="stopScan" disabled>Остановить сканирование</button>
+<button id="switchCamera">Переключить камеру</button>
 <div id="scannerContainer"></div>
+<div id="debugInfo" class="debug-info"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 <script>
@@ -43,6 +46,7 @@ let items = [];
 let lastScanned = null;
 let isScanning = false;
 let scanPaused = false;
+let currentFacingMode = "environment";
 
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
@@ -176,42 +180,87 @@ document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBl
 
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
+const switchCameraBtn = document.getElementById('switchCamera');
 const scannerContainer = document.getElementById('scannerContainer');
+const debugInfo = document.getElementById('debugInfo');
 
-startScanBtn.addEventListener('click', () => {
+function updateDebugInfo(message) {
+  debugInfo.textContent = message;
+  console.log(message);
+}
+
+function startScanner() {
   if (isScanning) return;
   
-  // Упрощенная конфигурация для лучшей совместимости
+  updateDebugInfo("Инициализация сканера...");
+  
+  // Более простая и надежная конфигурация
   Quagga.init({
     inputStream: {
       name: "Live",
       type: "LiveStream",
       target: scannerContainer,
       constraints: {
-        facingMode: "environment"
+        facingMode: currentFacingMode,
+        width: 640,
+        height: 480
       }
     },
     decoder: {
-      readers: [
-        "code_128_reader",
-        "ean_reader",
-        "ean_8_reader",
-        "code_39_reader"
-      ]
+      readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader"]
     },
-    locate: true
+    locator: {
+      patchSize: "medium",
+      halfSample: true
+    },
+    locate: true,
+    numOfWorkers: 2,
+    frequency: 10,
+    debug: {
+      drawBoundingBox: true,
+      showPattern: true
+    }
   }, function(err) {
     if (err) {
-      console.error("Quagga init error:", err);
-      alert('Не удалось запустить камеру. Попробуйте другой браузер (Chrome, Edge).');
+      updateDebugInfo("Ошибка инициализации: " + err);
+      alert('Не удалось запустить камеру. Попробуйте другой браузер (Chrome, Edge) или проверьте разрешения.');
       return;
     }
+    
     Quagga.start();
     isScanning = true;
     scanPaused = false;
     startScanBtn.disabled = true;
     stopScanBtn.disabled = false;
     startScanBtn.textContent = 'Сканирование...';
+    updateDebugInfo("Сканер запущен. Наведите камеру на штрихкод.");
+  });
+
+  Quagga.onProcessed(function(result) {
+    if (!result) return;
+    
+    // Отладочная информация о процессе сканирования
+    if (result.boxes) {
+      const canvas = Quagga.canvas.dom.overlay;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, parseInt(canvas.width), parseInt(canvas.height));
+      
+      if (result.boxes) {
+        result.boxes.filter(function(box) {
+          return box !== result.box;
+        }).forEach(function(box) {
+          Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, ctx, {color: "green", lineWidth: 2});
+        });
+      }
+      
+      if (result.box) {
+        Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, ctx, {color: "#00F", lineWidth: 2});
+      }
+      
+      if (result.codeResult && result.codeResult.code) {
+        Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, ctx, {color: 'red', lineWidth: 3});
+      }
+    }
   });
 
   Quagga.onDetected(function(result) {
@@ -219,20 +268,39 @@ startScanBtn.addEventListener('click', () => {
     if (scanPaused) return;
 
     const code = result.codeResult.code.trim();
+    const confidence = result.codeResult.confidence || 0;
+    
     if (!code) return;
 
-    // Упрощенная проверка - только минимальная валидация
-    if (code.length < 3) return;
+    updateDebugInfo(`Распознан код: "${code}", уверенность: ${confidence.toFixed(2)}`);
 
-    console.log("Распознан штрихкод:", code, "Уверенность:", result.codeResult.confidence);
+    // Улучшенная валидация штрихкода
+    if (code.length < 4) {
+      updateDebugInfo("Слишком короткий код, пропускаем");
+      return;
+    }
+    
+    // Проверяем уверенность распознавания
+    if (confidence < 20) {
+      updateDebugInfo("Низкая уверенность распознавания, пропускаем");
+      return;
+    }
+    
+    // Проверяем на наличие только допустимых символов
+    if (!/^[0-9a-zA-Z\-\.\s]+$/.test(code)) {
+      updateDebugInfo("Код содержит недопустимые символы");
+      return;
+    }
 
     // Добавляем код с количеством 1
     addOrIncreaseItem(code, 1);
+    updateDebugInfo(`✅ Добавлен штрихкод: ${code}`);
 
     // Устанавливаем паузу на 1.5 секунды
     scanPaused = true;
     setTimeout(() => {
       scanPaused = false;
+      updateDebugInfo("Готов к сканированию следующего штрихкода");
     }, 1500);
 
     // Визуальная обратная связь
@@ -243,7 +311,9 @@ startScanBtn.addEventListener('click', () => {
       }
     }, 1500);
   });
-});
+}
+
+startScanBtn.addEventListener('click', startScanner);
 
 stopScanBtn.addEventListener('click', () => {
   if (!isScanning) return;
@@ -255,6 +325,22 @@ stopScanBtn.addEventListener('click', () => {
   startScanBtn.disabled = false;
   stopScanBtn.disabled = true;
   startScanBtn.textContent = 'Начать сканирование';
+  updateDebugInfo("Сканирование остановлено");
+});
+
+switchCameraBtn.addEventListener('click', () => {
+  if (isScanning) {
+    Quagga.stop();
+    isScanning = false;
+  }
+  
+  // Переключаем между фронтальной и задней камерой
+  currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+  
+  updateDebugInfo(`Переключение на камеру: ${currentFacingMode === "environment" ? "задняя" : "фронтальная"}`);
+  
+  // Перезапускаем сканер с новой камерой
+  setTimeout(startScanner, 500);
 });
 
 loadItems();
