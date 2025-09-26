@@ -21,7 +21,7 @@
     body, html {
         margin: 0;
         padding: 0;
-        overflow-x: hidden; /* Убираем горизонтальный скролл */
+        overflow-x: hidden; /* убираем горизонтальный скролл */
         background-color: var(--light-bg);
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         -webkit-font-smoothing: antialiased;
@@ -114,8 +114,6 @@
         opacity: 1;
         transform: translateY(0);
     }
-
-
 </style>
 </head>
 <body>
@@ -127,7 +125,6 @@
 <div class="container">
   <!-- Основной экран -->
   <div id="main-screen" class="screen-visible">
-    <!-- Пример: Выбор типа инвентаризации-->
     <div class="card mb-4">
       <div class="card-header h5 mb-0">Инвентаризация</div>
       <div class="card-body">
@@ -207,10 +204,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  // Здесь должен быть весь JS, включая логику экспорта CSV, экспорта по сети, сканирования и управления элементами.
-  // Для краткости приведу только примеры функций exportToCSV и exportViaNetwork с уведомлениями и базовой логикой.
-
-  let scannedItems = []; // Здесь будет массив отсканированных товаров - заполняется вашим основным кодом
+  let scannedItems = []; // Ваш массив товаров
 
   function showNotification(message) {
     const notification = document.getElementById("notification");
@@ -219,9 +213,7 @@
     notification.classList.add("show");
     setTimeout(() => {
       notification.classList.remove("show");
-      setTimeout(() => {
-        notification.style.display = "none";
-      }, 300);
+      setTimeout(() => { notification.style.display = "none"; }, 300);
     }, 3000);
   }
 
@@ -252,7 +244,7 @@
       alert("Нет данных для экспорта");
       return;
     }
-    const serverUrl = "http://192.168.1.100:8080/upload";  // <-- Замените на IP вашего ПК
+    const serverUrl = "http://192.168.1.100:8080/upload";  // Замените на IP ПК в вашей сети
 
     let csvContent = "code,name,quantity,barcode,warehouse,location\n";
     scannedItems.forEach(item => {
@@ -275,13 +267,10 @@
     }
   }
 
-  // Здесь должен быть основной JS-код по сканированию, добавлению товаров, редактированию и т.д.,
-  // а также соответствующие слушатели кнопок (startInventory, addQuantity, exportCSV, exportNetwork)
-
-  // Получим кнопку экспорта CSV и кнопу экспорта по сети
   document.getElementById("exportCSV").addEventListener("click", exportToCSV);
   document.getElementById("exportNetwork").addEventListener("click", exportViaNetwork);
 
+  // Добавьте сюда остальной ваш JS код для управления сканированием, добавлением товаров и т.д.
 </script>
 </body>
 </html>
