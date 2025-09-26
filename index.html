@@ -188,42 +188,50 @@ startScanBtn.addEventListener('click', () => {
     ]
   };
 
-  Quagga.init({
-    inputStream: {
-      name: "Live",
-      type: "LiveStream",
-      target: scannerContainer,
-      constraints: constraints
-    },
-    decoder: {
-      readers: [
-        "code_128_reader",
-        "ean_reader",
-        "ean_8_reader",
-        "code_39_reader",
-        "code_93_reader",
-        "upc_reader",
-        "i2of5_reader",
-        "codabar_reader"
-      ]
-    },
-    locator: {
-      halfSample: true,
-      patchSize: "medium"
-    },
-    numOfWorkers: navigator.hardwareConcurrency || 4,
-    frequency: 15,
-    locate: false
-  }, function(err) {
-    if (err) {
-      console.error(err);
-      alert('Ошибка инициализации камеры: ' + (err.message || err));
-      return;
+ Quagga.init({
+  inputStream: {
+    name: "Live",
+    type: "LiveStream",
+    target: scannerContainer,
+    constraints: {
+      facingMode: "environment",
+      focusMode: "continuous"
     }
-    Quagga.start();
-    startScanBtn.disabled = true;
-    stopScanBtn.disabled = false;
-  });
+  },
+  decoder: {
+    readers: [
+      "code_128_reader",
+      "ean_reader",
+      "ean_8_reader",
+      "code_39_reader",
+      "code_93_reader",
+      "upc_reader",
+      "i2of5_reader",
+      "codabar_reader"
+    ]
+  },
+  locator: {
+    halfSample: true,
+    patchSize: "medium"
+  },
+  debug: {
+    showCanvas: true,        // показывает обработанное изображение
+    showPatches: true,       // показывает области анализа
+    showFoundPatches: true   // подсвечивает найденные коды
+  },
+  numOfWorkers: 2,
+  frequency: 15,
+  locate: true // включаем locate для отладки
+}, function(err) {
+  if (err) {
+    console.error(err);
+    alert('Ошибка камеры: ' + err.message);
+    return;
+  }
+  Quagga.start();
+  startScanBtn.disabled = true;
+  stopScanBtn.disabled = false;
+});
 
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
