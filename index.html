@@ -228,9 +228,9 @@ startScanBtn.addEventListener('click', async () => {
 
   try {
     // Запрашиваем доступ к камере
-   videoStream = await navigator.mediaDevices.getUserMedia({
+  videoStream = await navigator.mediaDevices.getUserMedia({
   video: {
-    facingMode: "user", // ✅ Фронтальная камера — работает
+    facingMode: "environment", // ❌ Блокируется на MIUI в подкаталогах
     width: { ideal: 1280 },
     height: { ideal: 720 }
   }
