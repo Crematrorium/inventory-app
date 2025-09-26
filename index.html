@@ -41,6 +41,8 @@
 <script>
 let items = [];
 let lastScanned = null;
+let lastScanTime = 0;
+const MIN_SCAN_INTERVAL = 1500; // 1.5 сек между добавлениями
 
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
@@ -178,41 +180,63 @@ const scannerContainer = document.getElementById('scannerContainer');
 
 startScanBtn.addEventListener('click', () => {
   Quagga.init({
-    inputStream : {
-      name : "Live",
-      type : "LiveStream",
+    inputStream: {
+      name: "Live",
+      type: "LiveStream",
       target: scannerContainer,
       constraints: {
         facingMode: "environment"
       }
     },
-    decoder : {
-      readers : ["code_128_reader","ean_reader","ean_8_reader","code_39_reader","upc_reader"]
-    },
-    locate: true,
-    numOfWorkers: navigator.hardwareConcurrency || 4,
-    frequency: 5,
-  }, function(err) {
-      if (err) {
-          console.error(err);
-          alert('Ошибка инициализации камеры: ' + err);
-          return;
+    decoder: {
+      readers: [
+        "code_128_reader",
+        "ean_reader",
+        "ean_8_reader",
+        "code_39_reader",
+        "code_39_vin_reader",
+        "code_93_reader",
+        "upc_reader",
+        "i2of5_reader",
+        "codabar_reader"
+      ],
+      debug: { // опционально: для отладки
+        showCanvas: false,
+        showPatches: false,
+        showFoundPatches: false
       }
-      Quagga.start();
-      startScanBtn.disabled = true;
-      stopScanBtn.disabled = false;
+    },
+    locator: {
+      halfSample: true,
+      patchSize: "medium" // medium или large для сложных кодов
+    },
+    numOfWorkers: navigator.hardwareConcurrency || 4,
+    frequency: 10, // чаще анализ кадров
+    locate: false // отключено — ускоряет распознавание
+  }, function(err) {
+    if (err) {
+      console.error(err);
+      alert('Ошибка инициализации камеры: ' + err);
+      return;
+    }
+    Quagga.start();
+    startScanBtn.disabled = true;
+    stopScanBtn.disabled = false;
   });
 
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
-    const code = result.codeResult.code;
-    addOrIncreaseItem(code, 1);
 
-    // Остановить сканирование после одного распознавания
-    Quagga.stop();
-    scannerContainer.innerHTML = '';
-    startScanBtn.disabled = false;
-    stopScanBtn.disabled = true;
+    const code = result.codeResult.code;
+    const confidence = result.codeResult.quality || 0;
+
+    // Добавляем только при высокой уверенности и с паузой между сканами
+    const now = Date.now();
+    if (confidence >= 0.8 && (now - lastScanTime) > MIN_SCAN_INTERVAL) {
+      addOrIncreaseItem(code, 1);
+      lastScanTime = now;
+      // Не останавливаем сканирование — можно сканировать дальше
+    }
   });
 });
 
