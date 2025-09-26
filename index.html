@@ -173,16 +173,25 @@ async function sendOverBluetooth() {
 }
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
-// ============ УЛУЧШЕННОЕ СКАНИРОВАНИЕ ДЛЯ GITHUB PAGES ============
+// ============ ИСПРАВЛЕННОЕ СКАНИРОВАНИЕ ============
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
 
+// Функция проверки контрольной суммы EAN-13
+function isValidEAN13(code) {
+  if (!/^\d{13}$/.test(code)) return false;
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(code[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return checkDigit === parseInt(code[12]);
+}
+
 startScanBtn.addEventListener('click', async () => {
-  // Сначала проверим, доступна ли камера
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    // Остановим поток — Quagga сам его запустит
     stream.getTracks().forEach(track => track.stop());
   } catch (err) {
     alert('Не удалось получить доступ к камере: ' + err.message);
@@ -199,12 +208,7 @@ startScanBtn.addEventListener('click', async () => {
       }
     },
     decoder: {
-      readers: [
-        "ean_reader",        // EAN-13
-        "ean_8_reader",      // EAN-8
-        "upc_reader",        // UPC-A/E
-        "code_128_reader"
-      ]
+      readers: ["ean_reader"] // только EAN — точнее и быстрее
     },
     locator: {
       halfSample: true,
@@ -229,19 +233,29 @@ startScanBtn.addEventListener('click', async () => {
 
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
-    if (!result.box) return; // надёжное распознавание
+    if (!result.box || !result.line) return; // надёжное распознавание
 
-    const code = result.codeResult.code.trim();
-    if (!code || code.length < 8) return;
+    let code = result.codeResult.code.trim();
+
+    // Уберём всё, кроме цифр (иногда Quagga добавляет спецсимволы)
+    code = code.replace(/\D/g, '');
+
+    // Пропускаем, если не 13 цифр
+    if (code.length !== 13) return;
+
+    // Проверяем контрольную сумму EAN-13
+    if (!isValidEAN13(code)) return;
 
     const now = Date.now();
-    if (code === lastCode && (now - lastTime) < 2000) return; // дубль
+    // Защита от дублей: не чаще чем раз в 2 секунды
+    if (code === lastCode && (now - lastTime) < 2000) return;
 
     lastCode = code;
     lastTime = now;
-    addOrIncreaseItem(code, 1);
 
-    // Автоостановка после успешного скана (как в оригинале)
+    addOrIncreaseItem(code, 1); // всегда 1
+
+    // Автоматическая остановка после успешного скана
     Quagga.stop();
     scannerContainer.innerHTML = '';
     startScanBtn.disabled = false;
