@@ -1,91 +1,230 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>title</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      max-width: 100vw;
-      overflow-x: hidden;
-      box-sizing: border-box;
-      font-family: Arial, sans-serif;
-    }
-    body {
-      margin: 20px;
-    }
-    *, *::before, *::after {
-      box-sizing: inherit;
-    }
-    input, button {
-      font-size: 1em;
-      padding: 6px;
-      margin: 5px 0;
-    }
-    table {
-      width: 100%;
-      max-width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-      table-layout: fixed;
-      word-wrap: break-word;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: left;
-      overflow-wrap: break-word;
-      max-width: 1px;
-    }
-    #scannerContainer {
-      width: 100%;
-      max-width: 400px;
-      height: 300px;
-      border: 1px solid #ccc;
-      margin-top: 10px;
-    }
-    #qtyToAdd {
-      width: 60px;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Инвентаризация</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  input, button { font-size: 1em; padding: 6px; margin: 5px 0; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  #scannerContainer { width: 100%; max-width: 400px; height: 300px; border: 1px solid #ccc; margin-top: 10px; }
+</style>
 </head>
 <body>
-  <h2>h2</h2>
-  <label for="barcodeInput">label</label><br />
-  <input id="barcodeInput" type="text" placeholder autofocus />
-  <button id="addQtyBtn">button</button>
-  <input id="qtyToAdd" type="number" value="1" min="1" />
+<h2>Инвентаризация</h2>
 
-  <table>
-    <thead>
-      <tr>
-        <th>th</th>
-        <th>th</th>
-        <th>th</th>
-        <th>th</th>
-        <th>th</th>
-        <th>th</th>
-      </tr>
-    </thead>
-    <tbody id="itemsTableBody"></tbody>
-  </table>
+<label for="barcodeInput">Ввод ШК или сканирование:</label><br/>
+<input id="barcodeInput" type="text" placeholder="Введите или отсканируйте штрихкод" autofocus />
+<button id="addQtyBtn">Добавить количество к последнему</button>
+<input id="qtyToAdd" type="number" value="1" min="1" style="width: 60px;" />
 
-  <button id="exportCsvBtn">CSVbutton</button>
-  <button id="sendBluetoothBtn">Bluetoothbutton</button>
+<table>
+  <thead>
+    <tr><th>Штрихкод</th><th>Количество</th><th>Редактировать</th></tr>
+  </thead>
+  <tbody id="itemsTableBody"></tbody>
+</table>
 
-  <hr />
+<button id="exportCsvBtn">Экспорт в CSV</button>
+<button id="sendBluetoothBtn">Отправить по Bluetooth</button>
 
-  <h3>h3</h3>
-  <button id="startScan">button</button>
-  <button id="stopScan" disabled>button</button>
+<hr>
 
-  <div id="scannerContainer"></div>
+<h3>Сканирование камеры</h3>
+<button id="startScan">Начать сканирование</button>
+<button id="stopScan" disabled>Остановить сканирование</button>
+<div id="scannerContainer"></div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
-  <script>
-    // Ваш JavaScript код без изменений
-  </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script>
+let items = [];
+let lastScanned = null;
+
+function saveItems() {
+  localStorage.setItem('inventoryItems', JSON.stringify(items));
+}
+
+function loadItems() {
+  const saved = localStorage.getItem('inventoryItems');
+  if (saved) {
+    try {
+      items = JSON.parse(saved);
+      refreshTable();
+    } catch(e) {
+      console.error('Ошибка парсинга данных из localStorage', e);
+    }
+  }
+}
+
+function refreshTable() {
+  const tbody = document.getElementById('itemsTableBody');
+  tbody.innerHTML = '';
+  items.forEach((item, index) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${item.code}</td>
+      <td><input type="number" min="1" value="${item.qty}" data-index="${index}" class="editQty" /></td>
+      <td><button data-index="${index}" class="deleteBtn">Удалить</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.querySelectorAll('.editQty').forEach(input => {
+    input.addEventListener('change', e => {
+      const i = e.target.dataset.index;
+      const val = parseInt(e.target.value);
+      if(val > 0) {
+        items[i].qty = val;
+        saveItems();
+      }
+      refreshTable();
+    });
+  });
+
+  document.querySelectorAll('.deleteBtn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const i = e.target.dataset.index;
+      items.splice(i, 1);
+      saveItems();
+      refreshTable();
+    });
+  });
+}
+
+function addOrIncreaseItem(code, qty = 1) {
+  if (!code) return;
+  let existing = items.find(item => item.code === code);
+  if(existing) {
+    existing.qty += qty;
+  } else {
+    items.push({code: code, qty: qty});
+  }
+  lastScanned = code;
+  saveItems();
+  refreshTable();
+}
+
+document.getElementById('barcodeInput').addEventListener('keydown', function(e) {
+  if(e.key === 'Enter') {
+    const code = e.target.value.trim();
+    if(!code) return;
+    addOrIncreaseItem(code, 1);
+    e.target.value = '';
+  }
+});
+
+document.getElementById('addQtyBtn').addEventListener('click', () => {
+  if(lastScanned) {
+    const qty = parseInt(document.getElementById('qtyToAdd').value);
+    if(qty > 0) {
+      addOrIncreaseItem(lastScanned, qty);
+    }
+  } else {
+    alert('Нет последнего отсканированного кода');
+  }
+});
+
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+  let csvContent = '';
+  items.forEach(i => {
+    csvContent += `${i.code}h${i.qty}\n`;
+  });
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'inventory.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+async function sendOverBluetooth() {
+  if (!navigator.bluetooth) {
+    alert('Bluetooth не поддерживается в этом браузере');
+    return;
+  }
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: ['00001101-0000-1000-8000-00805f9b34fb']
+    });
+
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
+    const characteristic = await service.getCharacteristic('00001101-0000-1000-8000-00805f9b34fb');
+
+    let csvContent = '';
+    items.forEach(i => {
+      csvContent += `${i.code}h${i.qty}\n`;
+    });
+    const encoder = new TextEncoder();
+    const data = encoder.encode(csvContent);
+
+    await characteristic.writeValue(data);
+    alert('Данные отправлены по Bluetooth!');
+  } catch (error) {
+    console.error(error);
+    alert('Ошибка Bluetooth: ' + error);
+  }
+}
+
+document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
+
+const startScanBtn = document.getElementById('startScan');
+const stopScanBtn = document.getElementById('stopScan');
+const scannerContainer = document.getElementById('scannerContainer');
+
+startScanBtn.addEventListener('click', () => {
+  Quagga.init({
+    inputStream : {
+      name : "Live",
+      type : "LiveStream",
+      target: scannerContainer,
+      constraints: {
+        facingMode: "environment"
+      }
+    },
+    decoder : {
+      readers : ["code_128_reader","ean_reader","ean_8_reader","code_39_reader","upc_reader"]
+    },
+    locate: true,
+    numOfWorkers: navigator.hardwareConcurrency || 4,
+    frequency: 5,
+  }, function(err) {
+      if (err) {
+          console.error(err);
+          alert('Ошибка инициализации камеры: ' + err);
+          return;
+      }
+      Quagga.start();
+      startScanBtn.disabled = true;
+      stopScanBtn.disabled = false;
+  });
+
+  Quagga.onDetected(function(result) {
+    if (!result || !result.codeResult || !result.codeResult.code) return;
+    const code = result.codeResult.code;
+    addOrIncreaseItem(code, 1);
+
+    // Остановить сканирование после одного распознавания
+    Quagga.stop();
+    scannerContainer.innerHTML = '';
+    startScanBtn.disabled = false;
+    stopScanBtn.disabled = true;
+  });
+});
+
+stopScanBtn.addEventListener('click', () => {
+  Quagga.stop();
+  scannerContainer.innerHTML = '';
+  startScanBtn.disabled = false;
+  stopScanBtn.disabled = true;
+});
+
+loadItems();
+
+</script>
 </body>
 </html>
