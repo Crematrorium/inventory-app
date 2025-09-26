@@ -5,21 +5,101 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Инвентаризация</title>
 <style>
-  body { font-family: Arial, sans-serif; margin: 20px; }
-  input, button { font-size: 1em; padding: 6px; margin: 5px 0; }
-  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-  #scannerContainer { width: 100%; max-width: 400px; height: 300px; border: 1px solid #ccc; margin-top: 10px; }
-  .debug-info { margin-top: 10px; font-size: 0.9em; color: #666; }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 16px;
+    max-width: 1000px;
+    margin-left: auto;
+    margin-right: auto;
+    overflow-x: hidden;
+  }
+  h2, h3 {
+    margin-top: 0;
+  }
+  .input-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 16px;
+  }
+  #barcodeInput {
+    flex: 1;
+    min-width: 180px;
+    font-size: 1em;
+    padding: 6px;
+  }
+  #addQtyBtn, #qtyToAdd, button {
+    font-size: 0.9em;
+    padding: 5px 8px;
+    white-space: nowrap;
+  }
+  #qtyToAdd {
+    width: 50px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    table-layout: fixed;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 6px;
+    text-align: left;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  th:nth-child(1), td:nth-child(1) {
+    width: 50%;
+  }
+  th:nth-child(2), td:nth-child(2) {
+    width: 30%;
+  }
+  th:nth-child(3), td:nth-child(3) {
+    width: 20%;
+  }
+  .btn-group {
+    margin: 10px 0;
+  }
+  .btn-group button {
+    margin-right: 8px;
+    margin-bottom: 6px;
+  }
+  #scannerContainer {
+    width: 100%;
+    height: 240px;
+    border: 1px solid #ccc;
+    margin-top: 10px;
+    background: #f9f9f9;
+  }
+  @media (max-width: 600px) {
+    .input-group {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    #barcodeInput {
+      width: 100%;
+    }
+    .btn-group button {
+      width: 100%;
+      margin-right: 0;
+    }
+  }
 </style>
 </head>
 <body>
 <h2>Инвентаризация</h2>
 
-<label for="barcodeInput">Ввод ШК или сканирование:</label><br/>
-<input id="barcodeInput" type="text" placeholder="Введите или отсканируйте штрихкод" autofocus />
-<button id="addQtyBtn">Добавить количество к последнему</button>
-<input id="qtyToAdd" type="number" value="1" min="1" style="width: 60px;" />
+<div class="input-group">
+  <input id="barcodeInput" type="text" placeholder="Введите или отсканируйте штрихкод" autofocus />
+  <button id="addQtyBtn">Добавить к последнему</button>
+  <input id="qtyToAdd" type="number" value="1" min="1" />
+</div>
 
 <table>
   <thead>
@@ -28,25 +108,24 @@
   <tbody id="itemsTableBody"></tbody>
 </table>
 
-<button id="exportCsvBtn">Экспорт в CSV</button>
-<button id="sendBluetoothBtn">Отправить по Bluetooth</button>
+<div class="btn-group">
+  <button id="exportCsvBtn">Экспорт в CSV</button>
+  <button id="sendBluetoothBtn">Отправить по Bluetooth</button>
+</div>
 
 <hr>
 
 <h3>Сканирование камеры</h3>
-<button id="startScan">Начать сканирование</button>
-<button id="stopScan" disabled>Остановить сканирование</button>
-<button id="switchCamera">Переключить камеру</button>
+<div class="btn-group">
+  <button id="startScan">Начать сканирование</button>
+  <button id="stopScan" disabled>Остановить</button>
+</div>
 <div id="scannerContainer"></div>
-<div id="debugInfo" class="debug-info"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 <script>
 let items = [];
 let lastScanned = null;
-let isScanning = false;
-let scanPaused = false;
-let currentFacingMode = "environment";
 
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
@@ -180,167 +259,52 @@ document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBl
 
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
-const switchCameraBtn = document.getElementById('switchCamera');
 const scannerContainer = document.getElementById('scannerContainer');
-const debugInfo = document.getElementById('debugInfo');
 
-function updateDebugInfo(message) {
-  debugInfo.textContent = message;
-  console.log(message);
-}
-
-function startScanner() {
-  if (isScanning) return;
-  
-  updateDebugInfo("Инициализация сканера...");
-  
-  // Более простая и надежная конфигурация
+startScanBtn.addEventListener('click', () => {
   Quagga.init({
-    inputStream: {
-      name: "Live",
-      type: "LiveStream",
+    inputStream : {
+      name : "Live",
+      type : "LiveStream",
       target: scannerContainer,
       constraints: {
-        facingMode: currentFacingMode,
-        width: 640,
-        height: 480
+        facingMode: "environment"
       }
     },
-    decoder: {
-      readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader"]
-    },
-    locator: {
-      patchSize: "medium",
-      halfSample: true
+    decoder : {
+      readers : ["code_128_reader","ean_reader","ean_8_reader","code_39_reader","upc_reader"]
     },
     locate: true,
-    numOfWorkers: 2,
-    frequency: 10,
-    debug: {
-      drawBoundingBox: true,
-      showPattern: true
-    }
+    numOfWorkers: navigator.hardwareConcurrency || 4,
+    frequency: 5,
   }, function(err) {
-    if (err) {
-      updateDebugInfo("Ошибка инициализации: " + err);
-      alert('Не удалось запустить камеру. Попробуйте другой браузер (Chrome, Edge) или проверьте разрешения.');
-      return;
-    }
-    
-    Quagga.start();
-    isScanning = true;
-    scanPaused = false;
-    startScanBtn.disabled = true;
-    stopScanBtn.disabled = false;
-    startScanBtn.textContent = 'Сканирование...';
-    updateDebugInfo("Сканер запущен. Наведите камеру на штрихкод.");
-  });
-
-  Quagga.onProcessed(function(result) {
-    if (!result) return;
-    
-    // Отладочная информация о процессе сканирования
-    if (result.boxes) {
-      const canvas = Quagga.canvas.dom.overlay;
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, parseInt(canvas.width), parseInt(canvas.height));
-      
-      if (result.boxes) {
-        result.boxes.filter(function(box) {
-          return box !== result.box;
-        }).forEach(function(box) {
-          Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, ctx, {color: "green", lineWidth: 2});
-        });
+      if (err) {
+          console.error(err);
+          alert('Ошибка инициализации камеры: ' + err);
+          return;
       }
-      
-      if (result.box) {
-        Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, ctx, {color: "#00F", lineWidth: 2});
-      }
-      
-      if (result.codeResult && result.codeResult.code) {
-        Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, ctx, {color: 'red', lineWidth: 3});
-      }
-    }
+      Quagga.start();
+      startScanBtn.disabled = true;
+      stopScanBtn.disabled = false;
   });
 
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
-    if (scanPaused) return;
+    const code = result.codeResult.code;
+    addOrIncreaseItem(code, 1); // Всегда 1
 
-    const code = result.codeResult.code.trim();
-    const confidence = result.codeResult.confidence || 0;
-    
-    if (!code) return;
-
-    updateDebugInfo(`Распознан код: "${code}", уверенность: ${confidence.toFixed(2)}`);
-
-    // Улучшенная валидация штрихкода
-    if (code.length < 4) {
-      updateDebugInfo("Слишком короткий код, пропускаем");
-      return;
-    }
-    
-    // Проверяем уверенность распознавания
-    if (confidence < 20) {
-      updateDebugInfo("Низкая уверенность распознавания, пропускаем");
-      return;
-    }
-    
-    // Проверяем на наличие только допустимых символов
-    if (!/^[0-9a-zA-Z\-\.\s]+$/.test(code)) {
-      updateDebugInfo("Код содержит недопустимые символы");
-      return;
-    }
-
-    // Добавляем код с количеством 1
-    addOrIncreaseItem(code, 1);
-    updateDebugInfo(`✅ Добавлен штрихкод: ${code}`);
-
-    // Устанавливаем паузу на 1.5 секунды
-    scanPaused = true;
-    setTimeout(() => {
-      scanPaused = false;
-      updateDebugInfo("Готов к сканированию следующего штрихкода");
-    }, 1500);
-
-    // Визуальная обратная связь
-    startScanBtn.textContent = '✅ Сканировано';
-    setTimeout(() => {
-      if (isScanning) {
-        startScanBtn.textContent = 'Сканирование...';
-      }
-    }, 1500);
+    Quagga.stop();
+    scannerContainer.innerHTML = '';
+    startScanBtn.disabled = false;
+    stopScanBtn.disabled = true;
   });
-}
-
-startScanBtn.addEventListener('click', startScanner);
-
-stopScanBtn.addEventListener('click', () => {
-  if (!isScanning) return;
-  
-  Quagga.stop();
-  scannerContainer.innerHTML = '';
-  isScanning = false;
-  scanPaused = false;
-  startScanBtn.disabled = false;
-  stopScanBtn.disabled = true;
-  startScanBtn.textContent = 'Начать сканирование';
-  updateDebugInfo("Сканирование остановлено");
 });
 
-switchCameraBtn.addEventListener('click', () => {
-  if (isScanning) {
-    Quagga.stop();
-    isScanning = false;
-  }
-  
-  // Переключаем между фронтальной и задней камерой
-  currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
-  
-  updateDebugInfo(`Переключение на камеру: ${currentFacingMode === "environment" ? "задняя" : "фронтальная"}`);
-  
-  // Перезапускаем сканер с новой камерой
-  setTimeout(startScanner, 500);
+stopScanBtn.addEventListener('click', () => {
+  Quagga.stop();
+  scannerContainer.innerHTML = '';
+  startScanBtn.disabled = false;
+  stopScanBtn.disabled = true;
 });
 
 loadItems();
