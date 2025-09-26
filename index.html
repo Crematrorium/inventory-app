@@ -44,15 +44,16 @@
 <button id="stopScan" disabled>Остановить сканирование</button>
 <div id="scannerContainer"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<!-- ZXing для надёжного сканирования -->
+<script src="https://unpkg.com/@zxing/browser@0.1.1/umd/zxing-browser.min.js"></script>
 <script>
 let items = [];
 let lastScanned = null;
 
-// --- остальная логика без изменений ---
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
 }
+
 function loadItems() {
   const saved = localStorage.getItem('inventoryItems');
   if (saved) {
@@ -64,6 +65,7 @@ function loadItems() {
     }
   }
 }
+
 function refreshTable() {
   const tbody = document.getElementById('itemsTableBody');
   tbody.innerHTML = '';
@@ -98,6 +100,7 @@ function refreshTable() {
     });
   });
 }
+
 function addOrIncreaseItem(code, qty = 1) {
   if (!code) return;
   let existing = items.find(item => item.code === code);
@@ -155,15 +158,18 @@ async function sendOverBluetooth() {
       acceptAllDevices: true,
       optionalServices: ['00001101-0000-1000-8000-00805f9b34fb']
     });
+
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
     const characteristic = await service.getCharacteristic('00001101-0000-1000-8000-00805f9b34fb');
+
     let csvContent = '';
     items.forEach(i => {
       csvContent += `${i.code}h${i.qty}\n`;
     });
     const encoder = new TextEncoder();
     const data = encoder.encode(csvContent);
+
     await characteristic.writeValue(data);
     alert('Данные отправлены по Bluetooth!');
   } catch (error) {
@@ -171,14 +177,16 @@ async function sendOverBluetooth() {
     alert('Ошибка Bluetooth: ' + error);
   }
 }
+
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
-// ============ ИСПРАВЛЕННОЕ СКАНИРОВАНИЕ ============
+// ============ НАДЁЖНОЕ СКАНИРОВАНИЕ С ZXING ============
+let codeReader = null;
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
 
-// Функция проверки контрольной суммы EAN-13
+// Проверка контрольной суммы EAN-13
 function isValidEAN13(code) {
   if (!/^\d{13}$/.test(code)) return false;
   let sum = 0;
@@ -189,83 +197,43 @@ function isValidEAN13(code) {
   return checkDigit === parseInt(code[12]);
 }
 
-startScanBtn.addEventListener('click', async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    stream.getTracks().forEach(track => track.stop());
-  } catch (err) {
-    alert('Не удалось получить доступ к камере: ' + err.message);
+startScanBtn.addEventListener('click', () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('Ваш браузер не поддерживает камеру');
     return;
   }
 
-  Quagga.init({
-    inputStream: {
-      name: "Live",
-      type: "LiveStream",
-      target: scannerContainer,
-      constraints: {
-        facingMode: "environment"
+  codeReader = new ZXing.BrowserMultiFormatReader();
+
+  codeReader.decodeFromVideoDevice(undefined, 'scannerContainer', (result, err) => {
+    if (result) {
+      let code = result.getText().trim().replace(/\D/g, '');
+      if (code.length === 13 && isValidEAN13(code)) {
+        addOrIncreaseItem(code, 1); // всегда 1
+        codeReader.reset();
+        startScanBtn.disabled = false;
+        stopScanBtn.disabled = true;
       }
-    },
-    decoder: {
-      readers: ["ean_reader"] // только EAN — точнее и быстрее
-    },
-    locator: {
-      halfSample: true,
-      patchSize: "medium"
-    },
-    numOfWorkers: 2,
-    frequency: 10,
-    locate: false
-  }, function(err) {
-    if (err) {
-      console.error("Quagga init error:", err);
-      alert('Ошибка инициализации: ' + err.message);
-      return;
     }
-    Quagga.start();
+    if (err && !(err instanceof ZXing.NotFoundException)) {
+      console.error('Ошибка сканирования:', err);
+    }
+  })
+  .then(() => {
     startScanBtn.disabled = true;
     stopScanBtn.disabled = false;
-  });
-
-  let lastCode = '';
-  let lastTime = 0;
-
-  Quagga.onDetected(function(result) {
-    if (!result || !result.codeResult || !result.codeResult.code) return;
-    if (!result.box || !result.line) return; // надёжное распознавание
-
-    let code = result.codeResult.code.trim();
-
-    // Уберём всё, кроме цифр (иногда Quagga добавляет спецсимволы)
-    code = code.replace(/\D/g, '');
-
-    // Пропускаем, если не 13 цифр
-    if (code.length !== 13) return;
-
-    // Проверяем контрольную сумму EAN-13
-    if (!isValidEAN13(code)) return;
-
-    const now = Date.now();
-    // Защита от дублей: не чаще чем раз в 2 секунды
-    if (code === lastCode && (now - lastTime) < 2000) return;
-
-    lastCode = code;
-    lastTime = now;
-
-    addOrIncreaseItem(code, 1); // всегда 1
-
-    // Автоматическая остановка после успешного скана
-    Quagga.stop();
-    scannerContainer.innerHTML = '';
-    startScanBtn.disabled = false;
-    stopScanBtn.disabled = true;
+  })
+  .catch(err => {
+    console.error('Ошибка камеры:', err);
+    alert('Не удалось запустить камеру. Разрешите доступ и обновите страницу.');
   });
 });
 
 stopScanBtn.addEventListener('click', () => {
-  Quagga.stop();
-  scannerContainer.innerHTML = '';
+  if (codeReader) {
+    codeReader.reset();
+    codeReader = null;
+  }
   startScanBtn.disabled = false;
   stopScanBtn.disabled = true;
 });
