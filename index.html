@@ -9,7 +9,14 @@
   input, button { font-size: 1em; padding: 6px; margin: 5px 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-  #scannerContainer { width: 100%; max-width: 400px; height: 300px; border: 1px solid #ccc; margin-top: 10px; position: relative; overflow: hidden; }
+  #scannerContainer { 
+    width: 100%; 
+    max-width: 400px; 
+    height: 300px; 
+    border: 1px solid #ccc; 
+    margin-top: 10px; 
+    position: relative;
+  }
 </style>
 </head>
 <body>
@@ -37,13 +44,13 @@
 <button id="stopScan" disabled>Остановить сканирование</button>
 <div id="scannerContainer"></div>
 
-<!-- Подключаем ZXing -->
-<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+<!-- Правильная библиотека для работы с камерой -->
+<script src="https://unpkg.com/@zxing/browser@0.1.1/umd/zxing-browser.min.js"></script>
 <script>
 let items = [];
 let lastScanned = null;
 
-// --- остальная логика (saveItems, loadItems, refreshTable, addOrIncreaseItem и т.д.) ---
+// --- ВСЯ ОСТАЛЬНАЯ ЛОГИКА БЕЗ ИЗМЕНЕНИЙ ---
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
 }
@@ -174,22 +181,23 @@ async function sendOverBluetooth() {
 
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
-// ============ ZXING СКАНИРОВАНИЕ ============
+// ============ ZXING СКАНИРОВАНИЕ (ИСПРАВЛЕНО) ============
 let codeReader = null;
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
 
 startScanBtn.addEventListener('click', () => {
-  // Используем MultiFormatReader — поддерживает EAN-13, UPC, Code 128 и др.
+  // Создаём ридер из ZXing Browser
   codeReader = new ZXing.BrowserMultiFormatReader();
 
-  codeReader.decodeFromVideoDevice(undefined, scannerContainer, (result, err) => {
+  // Запускаем сканирование
+  codeReader.decodeFromVideoDevice(undefined, 'scannerContainer', (result, err) => {
     if (result) {
       const code = result.getText().trim();
       if (code) {
         addOrIncreaseItem(code, 1);
-        // Останавливаем после первого успешного скана (как в оригинале)
+        // Останавливаем после успешного скана
         codeReader.reset();
         startScanBtn.disabled = false;
         stopScanBtn.disabled = true;
@@ -206,7 +214,7 @@ startScanBtn.addEventListener('click', () => {
   })
   .catch(err => {
     console.error('Не удалось запустить камеру:', err);
-    alert('Ошибка камеры: ' + (err.message || 'проверьте разрешения и HTTPS'));
+    alert('Ошибка камеры: ' + (err.message || 'проверьте разрешения и откройте по HTTPS'));
   });
 });
 
