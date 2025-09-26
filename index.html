@@ -181,41 +181,25 @@ const scannerContainer = document.getElementById('scannerContainer');
 startScanBtn.addEventListener('click', () => {
   if (isScanning) return;
   
-  const constraints = {
-    facingMode: "environment",
-    focusMode: "continuous",
-    advanced: [
-      { focusMode: "continuous" },
-      { facingMode: "environment" }
-    ]
-  };
-
+  // Упрощенная конфигурация для лучшей совместимости
   Quagga.init({
     inputStream: {
       name: "Live",
       type: "LiveStream",
       target: scannerContainer,
-      constraints: constraints
+      constraints: {
+        facingMode: "environment"
+      }
     },
     decoder: {
       readers: [
         "code_128_reader",
         "ean_reader",
         "ean_8_reader",
-        "code_39_reader",
-        "code_93_reader",
-        "upc_reader",
-        "i2of5_reader",
-        "codabar_reader"
+        "code_39_reader"
       ]
     },
-    locator: {
-      halfSample: true,
-      patchSize: "medium"
-    },
-    numOfWorkers: navigator.hardwareConcurrency || 4,
-    frequency: 15,
-    locate: false
+    locate: true
   }, function(err) {
     if (err) {
       console.error("Quagga init error:", err);
@@ -237,20 +221,10 @@ startScanBtn.addEventListener('click', () => {
     const code = result.codeResult.code.trim();
     if (!code) return;
 
-    // Улучшенная проверка на валидность штрихкода
-    const confidence = result.codeResult.confidence || 0;
-    
-    // Проверяем confidence (уверенность распознавания) - должен быть достаточно высоким
-    if (confidence < 30) return;
-    
-    // Проверяем длину штрихкода (обычно штрихкоды имеют длину от 8 символов)
-    if (code.length < 5) return;
-    
-    // Проверяем, что штрихкод содержит только допустимые символы
-    if (!/^[0-9a-zA-Z\-]+$/.test(code)) return;
-    
-    // Проверяем, что есть bounding box (ограничивающая рамка)
-    if (!result.box || result.box.length < 4) return;
+    // Упрощенная проверка - только минимальная валидация
+    if (code.length < 3) return;
+
+    console.log("Распознан штрихкод:", code, "Уверенность:", result.codeResult.confidence);
 
     // Добавляем код с количеством 1
     addOrIncreaseItem(code, 1);
