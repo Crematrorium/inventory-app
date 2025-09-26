@@ -9,7 +9,7 @@
   input, button { font-size: 1em; padding: 6px; margin: 5px 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-  #scannerContainer { width: 100%; max-width: 400px; height: 300px; border: 1px solid #ccc; margin-top: 10px; }
+  #scannerContainer { width: 100%; max-width: 400px; height: 300px; border: 1px solid #ccc; margin-top: 10px; position: relative; overflow: hidden; }
 </style>
 </head>
 <body>
@@ -37,14 +37,13 @@
 <button id="stopScan" disabled>Остановить сканирование</button>
 <div id="scannerContainer"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<!-- Подключаем ZXing -->
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <script>
 let items = [];
 let lastScanned = null;
-let lastScanCode = '';
-let lastScanTime = 0;
-const MIN_SCAN_INTERVAL = 1500; // 1.5 сек между одинаковыми сканами
 
+// --- остальная логика (saveItems, loadItems, refreshTable, addOrIncreaseItem и т.д.) ---
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
 }
@@ -175,98 +174,52 @@ async function sendOverBluetooth() {
 
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
+// ============ ZXING СКАНИРОВАНИЕ ============
+let codeReader = null;
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
 
 startScanBtn.addEventListener('click', () => {
-  const constraints = {
-    facingMode: "environment",
-    focusMode: "continuous",
-    advanced: [
-      { focusMode: "continuous" }
-    ]
-  };
+  // Используем MultiFormatReader — поддерживает EAN-13, UPC, Code 128 и др.
+  codeReader = new ZXing.BrowserMultiFormatReader();
 
- Quagga.init({
-  inputStream: {
-    name: "Live",
-    type: "LiveStream",
-    target: scannerContainer,
-    constraints: {
-      facingMode: "environment",
-      focusMode: "continuous"
-    }
-  },
-  decoder: {
-    readers: [
-      "code_128_reader",
-      "ean_reader",
-      "ean_8_reader",
-      "code_39_reader",
-      "code_93_reader",
-      "upc_reader",
-      "i2of5_reader",
-      "codabar_reader"
-    ]
-  },
-  locator: {
-    halfSample: true,
-    patchSize: "medium"
-  },
-  debug: {
-    showCanvas: true,        // показывает обработанное изображение
-    showPatches: true,       // показывает области анализа
-    showFoundPatches: true   // подсвечивает найденные коды
-  },
-  numOfWorkers: 2,
-  frequency: 15,
-  locate: true // включаем locate для отладки
-}, function(err) {
-  if (err) {
-    console.error(err);
-    alert('Ошибка камеры: ' + err.message);
-    return;
-  }
-  Quagga.start();
-  startScanBtn.disabled = true;
-  stopScanBtn.disabled = false;
-});
-
-  Quagga.onDetected(function(result) {
-    if (!result || !result.codeResult || !result.codeResult.code) return;
-
-    // Требуем наличие геометрии — признак надёжного распознавания
-    if (!result.box || !result.line) return;
-
-    const code = result.codeResult.code.trim();
-    if (!code) return;
-
-    const now = Date.now();
-    // Предотвращаем дублирование одного и того же кода
-    if (code === lastScanCode && (now - lastScanTime) < MIN_SCAN_INTERVAL) {
-      return;
+  codeReader.decodeFromVideoDevice(undefined, scannerContainer, (result, err) => {
+    if (result) {
+      const code = result.getText().trim();
+      if (code) {
+        addOrIncreaseItem(code, 1);
+        // Останавливаем после первого успешного скана (как в оригинале)
+        codeReader.reset();
+        startScanBtn.disabled = false;
+        stopScanBtn.disabled = true;
+      }
     }
 
-    // Дополнительно можно проверить confidence, если доступен
-    const quality = result.codeResult.quality || 0;
-    if (quality < 0.7) return; // только уверенные результаты
-
-    addOrIncreaseItem(code, 1);
-    lastScanCode = code;
-    lastScanTime = now;
+    if (err && !(err instanceof ZXing.NotFoundException)) {
+      console.error('Ошибка сканирования:', err);
+    }
+  })
+  .then(() => {
+    startScanBtn.disabled = true;
+    stopScanBtn.disabled = false;
+  })
+  .catch(err => {
+    console.error('Не удалось запустить камеру:', err);
+    alert('Ошибка камеры: ' + (err.message || 'проверьте разрешения и HTTPS'));
   });
 });
 
 stopScanBtn.addEventListener('click', () => {
-  Quagga.stop();
-  scannerContainer.innerHTML = '';
+  if (codeReader) {
+    codeReader.reset();
+    codeReader = null;
+  }
   startScanBtn.disabled = false;
   stopScanBtn.disabled = true;
 });
 
 loadItems();
-
 </script>
 </body>
 </html>
