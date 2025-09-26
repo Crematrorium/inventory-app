@@ -9,20 +9,32 @@
   input, button { font-size: 1em; padding: 6px; margin: 5px 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-  #scannerContainer { 
-    width: 100%; 
-    max-width: 400px; 
-    height: 300px; 
-    border: 1px solid #ccc; 
+  #scannerContainer {
+    width: 100%;
+    max-width: 400px;
+    height: 300px;
+    border: 1px solid #ccc;
     margin-top: 10px;
-    background: #000;
     position: relative;
+    background: #000;
+    overflow: hidden;
   }
-  /* Убедимся, что контейнер видим */
-  #scannerContainer video {
+  #scannerVideo {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    display: block;
+  }
+  .scan-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    border: 2px solid #0f0;
+    box-sizing: border-box;
+    display: none;
   }
 </style>
 </head>
@@ -50,10 +62,11 @@
 <button id="startScan">Начать сканирование</button>
 <button id="stopScan" disabled>Остановить сканирование</button>
 <div id="scannerContainer">
-  <div id="videoPlaceholder" style="color: white; padding: 20px;">Нажмите "Начать сканирование"</div>
+  <video id="scannerVideo" autoplay playsinline muted></video>
+  <div class="scan-overlay" id="scanOverlay"></div>
 </div>
 
-<!-- Используем более стабильную версию ZXing -->
+<!-- Подключаем ZXing -->
 <script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.1/umd/zxing-browser.min.js"></script>
 <script>
 let items = [];
@@ -183,12 +196,14 @@ async function sendOverBluetooth() {
 }
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
-// ============ ГАРАНТИРОВАННО РАБОЧЕЕ СКАНИРОВАНИЕ ============
+// ============ ГАРАНТИРОВАННОЕ СКАНИРОВАНИЕ С ВИДЕО ЭЛЕМЕНТОМ ============
 let codeReader = null;
+let videoStream = null;
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
-const videoPlaceholder = document.getElementById('videoPlaceholder');
+const scannerVideo = document.getElementById('scannerVideo');
+const scanOverlay = document.getElementById('scanOverlay');
 
 function isValidEAN13(code) {
   if (!/^\d{13}$/.test(code)) return false;
@@ -201,50 +216,67 @@ function isValidEAN13(code) {
 }
 
 startScanBtn.addEventListener('click', async () => {
-  // 1. Явно запрашиваем доступ к камере
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    // Останавливаем — ZXing сам создаст поток
-    stream.getTracks().forEach(track => track.stop());
-  } catch (err) {
-    alert('Ошибка доступа к камере: ' + (err.message || 'разрешите доступ в настройках'));
-    return;
+  // Очищаем предыдущее состояние
+  if (codeReader) {
+    codeReader.reset();
+    codeReader = null;
+  }
+  if (videoStream) {
+    videoStream.getTracks().forEach(track => track.stop());
+    videoStream = null;
   }
 
-  // 2. Очищаем контейнер
-  scannerContainer.innerHTML = '';
-  videoPlaceholder?.remove();
-
-  // 3. Запускаем ZXing
-  codeReader = new ZXing.BrowserMultiFormatReader();
-
   try {
-    await codeReader.decodeFromVideoDevice(
-      undefined,
-      scannerContainer,
-      (result, err) => {
-        if (result) {
-          let code = result.getText().trim().replace(/\D/g, '');
-          if (code.length === 13 && isValidEAN13(code)) {
-            addOrIncreaseItem(code, 1);
-            codeReader.reset();
-            startScanBtn.disabled = false;
-            stopScanBtn.disabled = true;
-          }
-        }
-        if (err && !(err instanceof ZXing.NotFoundException)) {
-          console.error('Ошибка в процессе сканирования:', err);
+    // Запрашиваем доступ к камере
+    videoStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: "environment",
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+
+    // Привязываем поток к видео
+    scannerVideo.srcObject = videoStream;
+    scannerVideo.play();
+
+    // Создаём ридер
+    codeReader = new ZXing.BrowserMultiFormatReader();
+
+    // Настройки для лучшего распознавания EAN-13
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13]);
+
+    // Запускаем сканирование с явным указанием видео
+    codeReader.decodeFromVideoElement(scannerVideo, (result, err) => {
+      if (result) {
+        let code = result.getText().trim().replace(/\D/g, '');
+        if (code.length === 13 && isValidEAN13(code)) {
+          addOrIncreaseItem(code, 1);
+          // Показываем зелёную рамку на 1 сек
+          scanOverlay.style.display = 'block';
+          setTimeout(() => {
+            scanOverlay.style.display = 'none';
+          }, 1000);
+          // Останавливаем сканирование
+          codeReader.reset();
+          startScanBtn.disabled = false;
+          stopScanBtn.disabled = true;
         }
       }
-    );
+      if (err && !(err instanceof ZXing.NotFoundException)) {
+        console.error('Ошибка сканирования:', err);
+      }
+    }, hints);
+
     startScanBtn.disabled = true;
     stopScanBtn.disabled = false;
+
   } catch (err) {
-    console.error('Не удалось запустить сканирование:', err);
-    alert('Ошибка: ' + (err.message || 'попробуйте перезагрузить страницу'));
-    scannerContainer.innerHTML = '<div style="color:white;padding:20px;">Ошибка камеры</div>';
-    startScanBtn.disabled = false;
-    stopScanBtn.disabled = true;
+    console.error('Ошибка доступа к камере:', err);
+    alert('Не удалось получить доступ к камере. Разрешите доступ и обновите страницу.');
+    scannerVideo.srcObject = null;
   }
 });
 
@@ -253,7 +285,12 @@ stopScanBtn.addEventListener('click', () => {
     codeReader.reset();
     codeReader = null;
   }
-  scannerContainer.innerHTML = '<div id="videoPlaceholder" style="color:white;padding:20px;">Сканирование остановлено</div>';
+  if (videoStream) {
+    videoStream.getTracks().forEach(track => track.stop());
+    videoStream = null;
+  }
+  scannerVideo.srcObject = null;
+  scanOverlay.style.display = 'none';
   startScanBtn.disabled = false;
   stopScanBtn.disabled = true;
 });
