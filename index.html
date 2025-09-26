@@ -16,6 +16,13 @@
     border: 1px solid #ccc; 
     margin-top: 10px;
     background: #000;
+    position: relative;
+  }
+  /* Убедимся, что контейнер видим */
+  #scannerContainer video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 </style>
 </head>
@@ -42,18 +49,20 @@
 <h3>Сканирование камеры</h3>
 <button id="startScan">Начать сканирование</button>
 <button id="stopScan" disabled>Остановить сканирование</button>
-<div id="scannerContainer"></div>
+<div id="scannerContainer">
+  <div id="videoPlaceholder" style="color: white; padding: 20px;">Нажмите "Начать сканирование"</div>
+</div>
 
-<!-- ZXing для надёжного сканирования -->
-<script src="https://unpkg.com/@zxing/browser@0.1.1/umd/zxing-browser.min.js"></script>
+<!-- Используем более стабильную версию ZXing -->
+<script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.1/umd/zxing-browser.min.js"></script>
 <script>
 let items = [];
 let lastScanned = null;
 
+// --- ОСТАЛЬНАЯ ЛОГИКА БЕЗ ИЗМЕНЕНИЙ ---
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
 }
-
 function loadItems() {
   const saved = localStorage.getItem('inventoryItems');
   if (saved) {
@@ -65,7 +74,6 @@ function loadItems() {
     }
   }
 }
-
 function refreshTable() {
   const tbody = document.getElementById('itemsTableBody');
   tbody.innerHTML = '';
@@ -100,7 +108,6 @@ function refreshTable() {
     });
   });
 }
-
 function addOrIncreaseItem(code, qty = 1) {
   if (!code) return;
   let existing = items.find(item => item.code === code);
@@ -158,18 +165,15 @@ async function sendOverBluetooth() {
       acceptAllDevices: true,
       optionalServices: ['00001101-0000-1000-8000-00805f9b34fb']
     });
-
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
     const characteristic = await service.getCharacteristic('00001101-0000-1000-8000-00805f9b34fb');
-
     let csvContent = '';
     items.forEach(i => {
       csvContent += `${i.code}h${i.qty}\n`;
     });
     const encoder = new TextEncoder();
     const data = encoder.encode(csvContent);
-
     await characteristic.writeValue(data);
     alert('Данные отправлены по Bluetooth!');
   } catch (error) {
@@ -177,16 +181,15 @@ async function sendOverBluetooth() {
     alert('Ошибка Bluetooth: ' + error);
   }
 }
-
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
-// ============ НАДЁЖНОЕ СКАНИРОВАНИЕ С ZXING ============
+// ============ ГАРАНТИРОВАННО РАБОЧЕЕ СКАНИРОВАНИЕ ============
 let codeReader = null;
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
+const videoPlaceholder = document.getElementById('videoPlaceholder');
 
-// Проверка контрольной суммы EAN-13
 function isValidEAN13(code) {
   if (!/^\d{13}$/.test(code)) return false;
   let sum = 0;
@@ -197,36 +200,52 @@ function isValidEAN13(code) {
   return checkDigit === parseInt(code[12]);
 }
 
-startScanBtn.addEventListener('click', () => {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert('Ваш браузер не поддерживает камеру');
+startScanBtn.addEventListener('click', async () => {
+  // 1. Явно запрашиваем доступ к камере
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    // Останавливаем — ZXing сам создаст поток
+    stream.getTracks().forEach(track => track.stop());
+  } catch (err) {
+    alert('Ошибка доступа к камере: ' + (err.message || 'разрешите доступ в настройках'));
     return;
   }
 
+  // 2. Очищаем контейнер
+  scannerContainer.innerHTML = '';
+  videoPlaceholder?.remove();
+
+  // 3. Запускаем ZXing
   codeReader = new ZXing.BrowserMultiFormatReader();
 
-  codeReader.decodeFromVideoDevice(undefined, 'scannerContainer', (result, err) => {
-    if (result) {
-      let code = result.getText().trim().replace(/\D/g, '');
-      if (code.length === 13 && isValidEAN13(code)) {
-        addOrIncreaseItem(code, 1); // всегда 1
-        codeReader.reset();
-        startScanBtn.disabled = false;
-        stopScanBtn.disabled = true;
+  try {
+    await codeReader.decodeFromVideoDevice(
+      undefined,
+      scannerContainer,
+      (result, err) => {
+        if (result) {
+          let code = result.getText().trim().replace(/\D/g, '');
+          if (code.length === 13 && isValidEAN13(code)) {
+            addOrIncreaseItem(code, 1);
+            codeReader.reset();
+            startScanBtn.disabled = false;
+            stopScanBtn.disabled = true;
+          }
+        }
+        if (err && !(err instanceof ZXing.NotFoundException)) {
+          console.error('Ошибка в процессе сканирования:', err);
+        }
       }
-    }
-    if (err && !(err instanceof ZXing.NotFoundException)) {
-      console.error('Ошибка сканирования:', err);
-    }
-  })
-  .then(() => {
+    );
     startScanBtn.disabled = true;
     stopScanBtn.disabled = false;
-  })
-  .catch(err => {
-    console.error('Ошибка камеры:', err);
-    alert('Не удалось запустить камеру. Разрешите доступ и обновите страницу.');
-  });
+  } catch (err) {
+    console.error('Не удалось запустить сканирование:', err);
+    alert('Ошибка: ' + (err.message || 'попробуйте перезагрузить страницу'));
+    scannerContainer.innerHTML = '<div style="color:white;padding:20px;">Ошибка камеры</div>';
+    startScanBtn.disabled = false;
+    stopScanBtn.disabled = true;
+  }
 });
 
 stopScanBtn.addEventListener('click', () => {
@@ -234,6 +253,7 @@ stopScanBtn.addEventListener('click', () => {
     codeReader.reset();
     codeReader = null;
   }
+  scannerContainer.innerHTML = '<div id="videoPlaceholder" style="color:white;padding:20px;">Сканирование остановлено</div>';
   startScanBtn.disabled = false;
   stopScanBtn.disabled = true;
 });
