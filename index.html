@@ -41,6 +41,8 @@
 <script>
 let items = [];
 let lastScanned = null;
+let isScanning = false;
+let scanPaused = false;
 
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
@@ -177,11 +179,11 @@ const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
 
 startScanBtn.addEventListener('click', () => {
-  // Пытаемся запросить автофокус
+  if (isScanning) return;
+  
   const constraints = {
     facingMode: "environment",
-    // Эти параметры поддерживаются не во всех браузерах, но где поддерживаются — помогают
-    focusMode: "continuous", // автофокус
+    focusMode: "continuous",
     advanced: [
       { focusMode: "continuous" },
       { facingMode: "environment" }
@@ -212,7 +214,7 @@ startScanBtn.addEventListener('click', () => {
       patchSize: "medium"
     },
     numOfWorkers: navigator.hardwareConcurrency || 4,
-    frequency: 15, // ещё выше частота
+    frequency: 15,
     locate: false
   }, function(err) {
     if (err) {
@@ -221,38 +223,61 @@ startScanBtn.addEventListener('click', () => {
       return;
     }
     Quagga.start();
+    isScanning = true;
+    scanPaused = false;
     startScanBtn.disabled = true;
     stopScanBtn.disabled = false;
+    startScanBtn.textContent = 'Сканирование...';
   });
 
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
-
-    // Дополнительная проверка: наличие bounding box и линии — признак надёжного распознавания
-    if (!result.box || !result.line) return;
+    if (scanPaused) return;
 
     const code = result.codeResult.code.trim();
     if (!code) return;
 
-    // Добавляем и останавливаем сканирование
+    // Улучшенная проверка на валидность штрихкода
+    const confidence = result.codeResult.confidence || 0;
+    
+    // Проверяем confidence (уверенность распознавания) - должен быть достаточно высоким
+    if (confidence < 30) return;
+    
+    // Проверяем длину штрихкода (обычно штрихкоды имеют длину от 8 символов)
+    if (code.length < 5) return;
+    
+    // Проверяем, что штрихкод содержит только допустимые символы
+    if (!/^[0-9a-zA-Z\-]+$/.test(code)) return;
+    
+    // Проверяем, что есть bounding box (ограничивающая рамка)
+    if (!result.box || result.box.length < 4) return;
+
+    // Добавляем код с количеством 1
     addOrIncreaseItem(code, 1);
 
-    Quagga.stop();
-    scannerContainer.innerHTML = '';
-    startScanBtn.disabled = false;
-    stopScanBtn.disabled = true;
-
-    // Визуальная обратная связь (опционально)
-    startScanBtn.textContent = '✅ Сканирование завершено';
+    // Устанавливаем паузу на 1.5 секунды
+    scanPaused = true;
     setTimeout(() => {
-      startScanBtn.textContent = 'Начать сканирование';
+      scanPaused = false;
+    }, 1500);
+
+    // Визуальная обратная связь
+    startScanBtn.textContent = '✅ Сканировано';
+    setTimeout(() => {
+      if (isScanning) {
+        startScanBtn.textContent = 'Сканирование...';
+      }
     }, 1500);
   });
 });
 
 stopScanBtn.addEventListener('click', () => {
+  if (!isScanning) return;
+  
   Quagga.stop();
   scannerContainer.innerHTML = '';
+  isScanning = false;
+  scanPaused = false;
   startScanBtn.disabled = false;
   stopScanBtn.disabled = true;
   startScanBtn.textContent = 'Начать сканирование';
