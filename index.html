@@ -41,9 +41,8 @@
 <script>
 let items = [];
 let lastScanned = null;
-let lastScanCode = '';
 let lastScanTime = 0;
-const MIN_SCAN_INTERVAL = 1500; // 1.5 сек между одинаковыми сканами
+const MIN_SCAN_INTERVAL = 1500; // 1.5 сек между добавлениями
 
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
@@ -180,20 +179,14 @@ const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
 
 startScanBtn.addEventListener('click', () => {
-  const constraints = {
-    facingMode: "environment",
-    focusMode: "continuous",
-    advanced: [
-      { focusMode: "continuous" }
-    ]
-  };
-
   Quagga.init({
     inputStream: {
       name: "Live",
       type: "LiveStream",
       target: scannerContainer,
-      constraints: constraints
+      constraints: {
+        facingMode: "environment"
+      }
     },
     decoder: {
       readers: [
@@ -201,23 +194,29 @@ startScanBtn.addEventListener('click', () => {
         "ean_reader",
         "ean_8_reader",
         "code_39_reader",
+        "code_39_vin_reader",
         "code_93_reader",
         "upc_reader",
         "i2of5_reader",
         "codabar_reader"
-      ]
+      ],
+      debug: { // опционально: для отладки
+        showCanvas: false,
+        showPatches: false,
+        showFoundPatches: false
+      }
     },
     locator: {
       halfSample: true,
-      patchSize: "medium"
+      patchSize: "medium" // medium или large для сложных кодов
     },
     numOfWorkers: navigator.hardwareConcurrency || 4,
-    frequency: 15,
-    locate: false
+    frequency: 10, // чаще анализ кадров
+    locate: false // отключено — ускоряет распознавание
   }, function(err) {
     if (err) {
       console.error(err);
-      alert('Ошибка инициализации камеры: ' + (err.message || err));
+      alert('Ошибка инициализации камеры: ' + err);
       return;
     }
     Quagga.start();
@@ -228,25 +227,16 @@ startScanBtn.addEventListener('click', () => {
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
 
-    // Требуем наличие геометрии — признак надёжного распознавания
-    if (!result.box || !result.line) return;
+    const code = result.codeResult.code;
+    const confidence = result.codeResult.quality || 0;
 
-    const code = result.codeResult.code.trim();
-    if (!code) return;
-
+    // Добавляем только при высокой уверенности и с паузой между сканами
     const now = Date.now();
-    // Предотвращаем дублирование одного и того же кода
-    if (code === lastScanCode && (now - lastScanTime) < MIN_SCAN_INTERVAL) {
-      return;
+    if (confidence >= 0.8 && (now - lastScanTime) > MIN_SCAN_INTERVAL) {
+      addOrIncreaseItem(code, 1);
+      lastScanTime = now;
+      // Не останавливаем сканирование — можно сканировать дальше
     }
-
-    // Дополнительно можно проверить confidence, если доступен
-    const quality = result.codeResult.quality || 0;
-    if (quality < 0.7) return; // только уверенные результаты
-
-    addOrIncreaseItem(code, 1);
-    lastScanCode = code;
-    lastScanTime = now;
   });
 });
 
