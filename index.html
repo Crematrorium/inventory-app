@@ -179,44 +179,89 @@ async function sendOverBluetooth() {
 
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
+// ============ ИСПРАВЛЕННОЕ СКАНИРОВАНИЕ ============
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
 
-startScanBtn.addEventListener('click', () => {
+// Функция проверки контрольной суммы EAN-13
+function isValidEAN13(code) {
+  if (!/^\d{13}$/.test(code)) return false;
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(code[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return checkDigit === parseInt(code[12]);
+}
+
+startScanBtn.addEventListener('click', async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    stream.getTracks().forEach(track => track.stop());
+  } catch (err) {
+    alert('Не удалось получить доступ к камере: ' + err.message);
+    return;
+  }
+
   Quagga.init({
-    inputStream : {
-      name : "Live",
-      type : "LiveStream",
+    inputStream: {
+      name: "Live",
+      type: "LiveStream",
       target: scannerContainer,
       constraints: {
         facingMode: "environment"
       }
     },
-    decoder : {
-      readers : ["code_128_reader","ean_reader","ean_8_reader","code_39_reader","upc_reader"]
+    decoder: {
+      readers: ["ean_reader"] // только EAN — точнее и быстрее
     },
-    locate: true,
-    numOfWorkers: navigator.hardwareConcurrency || 4,
-    frequency: 5,
+    locator: {
+      halfSample: true,
+      patchSize: "medium"
+    },
+    numOfWorkers: 2,
+    frequency: 10,
+    locate: false
   }, function(err) {
-      if (err) {
-          console.error(err);
-          alert('Ошибка инициализации камеры: ' + err);
-          return;
-      }
-      Quagga.start();
-      startScanBtn.disabled = true;
-      stopScanBtn.disabled = false;
+    if (err) {
+      console.error("Quagga init error:", err);
+      alert('Ошибка инициализации: ' + err.message);
+      return;
+    }
+    Quagga.start();
+    startScanBtn.disabled = true;
+    stopScanBtn.disabled = false;
   });
+
+  let lastCode = '';
+  let lastTime = 0;
 
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
-    const code = result.codeResult.code;
-    // Всегда добавляем 1 при сканировании камерой
-    addOrIncreaseItem(code, 1);
+    if (!result.box || !result.line) return; // надёжное распознавание
 
-    // Остановить сканирование после одного распознавания
+    let code = result.codeResult.code.trim();
+
+    // Уберём всё, кроме цифр (иногда Quagga добавляет спецсимволы)
+    code = code.replace(/\D/g, '');
+
+    // Пропускаем, если не 13 цифр
+    if (code.length !== 13) return;
+
+    // Проверяем контрольную сумму EAN-13
+    if (!isValidEAN13(code)) return;
+
+    const now = Date.now();
+    // Защита от дублей: не чаще чем раз в 2 секунды
+    if (code === lastCode && (now - lastTime) < 2000) return;
+
+    lastCode = code;
+    lastTime = now;
+
+    addOrIncreaseItem(code, 1); // всегда 1
+
+    // Автоматическая остановка после успешного скана
     Quagga.stop();
     scannerContainer.innerHTML = '';
     startScanBtn.disabled = false;
