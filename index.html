@@ -9,14 +9,7 @@
   input, button { font-size: 1em; padding: 6px; margin: 5px 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-  #scannerContainer { 
-    width: 100%; 
-    max-width: 400px; 
-    height: 300px; 
-    border: 1px solid #ccc; 
-    margin-top: 10px;
-    background: #000;
-  }
+  #scannerContainer { width: 100%; max-width: 400px; height: 300px; border: 1px solid #ccc; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -48,11 +41,14 @@
 <script>
 let items = [];
 let lastScanned = null;
+let lastScanCode = '';
+let lastScanTime = 0;
+const MIN_SCAN_INTERVAL = 1500; // 1.5 сек между одинаковыми сканами
 
-// --- остальная логика без изменений ---
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
 }
+
 function loadItems() {
   const saved = localStorage.getItem('inventoryItems');
   if (saved) {
@@ -64,6 +60,7 @@ function loadItems() {
     }
   }
 }
+
 function refreshTable() {
   const tbody = document.getElementById('itemsTableBody');
   tbody.innerHTML = '';
@@ -98,6 +95,7 @@ function refreshTable() {
     });
   });
 }
+
 function addOrIncreaseItem(code, qty = 1) {
   if (!code) return;
   let existing = items.find(item => item.code === code);
@@ -155,15 +153,18 @@ async function sendOverBluetooth() {
       acceptAllDevices: true,
       optionalServices: ['00001101-0000-1000-8000-00805f9b34fb']
     });
+
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
     const characteristic = await service.getCharacteristic('00001101-0000-1000-8000-00805f9b34fb');
+
     let csvContent = '';
     items.forEach(i => {
       csvContent += `${i.code}h${i.qty}\n`;
     });
     const encoder = new TextEncoder();
     const data = encoder.encode(csvContent);
+
     await characteristic.writeValue(data);
     alert('Данные отправлены по Bluetooth!');
   } catch (error) {
@@ -171,52 +172,52 @@ async function sendOverBluetooth() {
     alert('Ошибка Bluetooth: ' + error);
   }
 }
+
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
-// ============ УЛУЧШЕННОЕ СКАНИРОВАНИЕ ДЛЯ GITHUB PAGES ============
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
 
-startScanBtn.addEventListener('click', async () => {
-  // Сначала проверим, доступна ли камера
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    // Остановим поток — Quagga сам его запустит
-    stream.getTracks().forEach(track => track.stop());
-  } catch (err) {
-    alert('Не удалось получить доступ к камере: ' + err.message);
-    return;
-  }
+startScanBtn.addEventListener('click', () => {
+  const constraints = {
+    facingMode: "environment",
+    focusMode: "continuous",
+    advanced: [
+      { focusMode: "continuous" }
+    ]
+  };
 
   Quagga.init({
     inputStream: {
       name: "Live",
       type: "LiveStream",
       target: scannerContainer,
-      constraints: {
-        facingMode: "environment"
-      }
+      constraints: constraints
     },
     decoder: {
       readers: [
-        "ean_reader",        // EAN-13
-        "ean_8_reader",      // EAN-8
-        "upc_reader",        // UPC-A/E
-        "code_128_reader"
+        "code_128_reader",
+        "ean_reader",
+        "ean_8_reader",
+        "code_39_reader",
+        "code_93_reader",
+        "upc_reader",
+        "i2of5_reader",
+        "codabar_reader"
       ]
     },
     locator: {
       halfSample: true,
       patchSize: "medium"
     },
-    numOfWorkers: 2,
-    frequency: 10,
+    numOfWorkers: navigator.hardwareConcurrency || 4,
+    frequency: 15,
     locate: false
   }, function(err) {
     if (err) {
-      console.error("Quagga init error:", err);
-      alert('Ошибка инициализации: ' + err.message);
+      console.error(err);
+      alert('Ошибка инициализации камеры: ' + (err.message || err));
       return;
     }
     Quagga.start();
@@ -224,28 +225,28 @@ startScanBtn.addEventListener('click', async () => {
     stopScanBtn.disabled = false;
   });
 
-  let lastCode = '';
-  let lastTime = 0;
-
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
-    if (!result.box) return; // надёжное распознавание
+
+    // Требуем наличие геометрии — признак надёжного распознавания
+    if (!result.box || !result.line) return;
 
     const code = result.codeResult.code.trim();
-    if (!code || code.length < 8) return;
+    if (!code) return;
 
     const now = Date.now();
-    if (code === lastCode && (now - lastTime) < 2000) return; // дубль
+    // Предотвращаем дублирование одного и того же кода
+    if (code === lastScanCode && (now - lastScanTime) < MIN_SCAN_INTERVAL) {
+      return;
+    }
 
-    lastCode = code;
-    lastTime = now;
+    // Дополнительно можно проверить confidence, если доступен
+    const quality = result.codeResult.quality || 0;
+    if (quality < 0.7) return; // только уверенные результаты
+
     addOrIncreaseItem(code, 1);
-
-    // Автоостановка после успешного скана (как в оригинале)
-    Quagga.stop();
-    scannerContainer.innerHTML = '';
-    startScanBtn.disabled = false;
-    stopScanBtn.disabled = true;
+    lastScanCode = code;
+    lastScanTime = now;
   });
 });
 
@@ -257,6 +258,7 @@ stopScanBtn.addEventListener('click', () => {
 });
 
 loadItems();
+
 </script>
 </body>
 </html>
