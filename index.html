@@ -5,7 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Инвентаризация</title>
 <style>
-  body { font-family: Arial, sans-serif; margin: 20px; }
+  body { 
+    font-family: Arial, sans-serif; 
+    margin: 20px; 
+    max-width: 1000px; 
+    margin-left: auto; 
+    margin-right: auto; 
+    overflow-x: hidden; 
+  }
   input, button { font-size: 1em; padding: 6px; margin: 5px 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
@@ -177,76 +184,43 @@ const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
 
 startScanBtn.addEventListener('click', () => {
-  // Пытаемся запросить автофокус
-  const constraints = {
-    facingMode: "environment",
-    // Эти параметры поддерживаются не во всех браузерах, но где поддерживаются — помогают
-    focusMode: "continuous", // автофокус
-    advanced: [
-      { focusMode: "continuous" },
-      { facingMode: "environment" }
-    ]
-  };
-
   Quagga.init({
-    inputStream: {
-      name: "Live",
-      type: "LiveStream",
+    inputStream : {
+      name : "Live",
+      type : "LiveStream",
       target: scannerContainer,
-      constraints: constraints
+      constraints: {
+        facingMode: "environment"
+      }
     },
-    decoder: {
-      readers: [
-        "code_128_reader",
-        "ean_reader",
-        "ean_8_reader",
-        "code_39_reader",
-        "code_93_reader",
-        "upc_reader",
-        "i2of5_reader",
-        "codabar_reader"
-      ]
+    decoder : {
+      readers : ["code_128_reader","ean_reader","ean_8_reader","code_39_reader","upc_reader"]
     },
-    locator: {
-      halfSample: true,
-      patchSize: "medium"
-    },
+    locate: true,
     numOfWorkers: navigator.hardwareConcurrency || 4,
-    frequency: 15, // ещё выше частота
-    locate: false
+    frequency: 5,
   }, function(err) {
-    if (err) {
-      console.error("Quagga init error:", err);
-      alert('Не удалось запустить камеру. Попробуйте другой браузер (Chrome, Edge).');
-      return;
-    }
-    Quagga.start();
-    startScanBtn.disabled = true;
-    stopScanBtn.disabled = false;
+      if (err) {
+          console.error(err);
+          alert('Ошибка инициализации камеры: ' + err);
+          return;
+      }
+      Quagga.start();
+      startScanBtn.disabled = true;
+      stopScanBtn.disabled = false;
   });
 
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
-
-    // Дополнительная проверка: наличие bounding box и линии — признак надёжного распознавания
-    if (!result.box || !result.line) return;
-
-    const code = result.codeResult.code.trim();
-    if (!code) return;
-
-    // Добавляем и останавливаем сканирование
+    const code = result.codeResult.code;
+    // Всегда добавляем 1 при сканировании камерой
     addOrIncreaseItem(code, 1);
 
+    // Остановить сканирование после одного распознавания
     Quagga.stop();
     scannerContainer.innerHTML = '';
     startScanBtn.disabled = false;
     stopScanBtn.disabled = true;
-
-    // Визуальная обратная связь (опционально)
-    startScanBtn.textContent = '✅ Сканирование завершено';
-    setTimeout(() => {
-      startScanBtn.textContent = 'Начать сканирование';
-    }, 1500);
   });
 });
 
@@ -255,7 +229,6 @@ stopScanBtn.addEventListener('click', () => {
   scannerContainer.innerHTML = '';
   startScanBtn.disabled = false;
   stopScanBtn.disabled = true;
-  startScanBtn.textContent = 'Начать сканирование';
 });
 
 loadItems();
