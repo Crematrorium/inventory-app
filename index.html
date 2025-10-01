@@ -179,7 +179,6 @@ async function sendOverBluetooth() {
 
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
-// ============ ИСПРАВЛЕННОЕ СКАНИРОВАНИЕ ============
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
@@ -195,10 +194,15 @@ function isValidEAN13(code) {
   return checkDigit === parseInt(code[12]);
 }
 
+// Заглушка для функции добавления или увеличения количества товара в списке
+// Замените на вашу реализацию
+function addOrIncreaseItem(code, quantity) {
+  console.log(`Добавлено/увеличено количество для кода ${code} на ${quantity}`);
+}
+
 startScanBtn.addEventListener('click', async () => {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    stream.getTracks().forEach(track => track.stop());
+    await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
   } catch (err) {
     alert('Не удалось получить доступ к камере: ' + err.message);
     return;
@@ -211,10 +215,16 @@ startScanBtn.addEventListener('click', async () => {
       target: scannerContainer,
       constraints: {
         facingMode: "environment"
+      },
+      area: { // область сканирования (ROI) в процентах от экрана
+        top: "25%",    // верхняя граница
+        right: "10%",  // правая граница
+        left: "10%",   // левая граница
+        bottom: "25%"  // нижняя граница
       }
     },
     decoder: {
-      readers: ["ean_reader"] // только EAN — точнее и быстрее
+      readers: ["ean_reader"]
     },
     locator: {
       halfSample: true,
@@ -239,29 +249,21 @@ startScanBtn.addEventListener('click', async () => {
 
   Quagga.onDetected(function(result) {
     if (!result || !result.codeResult || !result.codeResult.code) return;
-    if (!result.box || !result.line) return; // надёжное распознавание
+    if (!result.box || !result.line) return;
 
-    let code = result.codeResult.code.trim();
+    let code = result.codeResult.code.trim().replace(/\D/g, '');
 
-    // Уберём всё, кроме цифр (иногда Quagga добавляет спецсимволы)
-    code = code.replace(/\D/g, '');
-
-    // Пропускаем, если не 13 цифр
     if (code.length !== 13) return;
-
-    // Проверяем контрольную сумму EAN-13
     if (!isValidEAN13(code)) return;
 
     const now = Date.now();
-    // Защита от дублей: не чаще чем раз в 2 секунды
-    if (code === lastCode && (now - lastTime) < 2000) return;
+    if (code === lastCode && (now - lastTime) < 3000) return; // задержка 3 секунды для исключения дублей
 
     lastCode = code;
     lastTime = now;
 
-    addOrIncreaseItem(code, 1); // всегда 1
+    addOrIncreaseItem(code, 1);
 
-    // Автоматическая остановка после успешного скана
     Quagga.stop();
     scannerContainer.innerHTML = '';
     startScanBtn.disabled = false;
@@ -275,6 +277,7 @@ stopScanBtn.addEventListener('click', () => {
   startScanBtn.disabled = false;
   stopScanBtn.disabled = true;
 });
+
 
 loadItems();
 
