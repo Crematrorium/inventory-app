@@ -9,32 +9,13 @@
   input, button { font-size: 1em; padding: 6px; margin: 5px 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-  #scannerContainer {
-    width: 100%;
-    max-width: 400px;
-    height: 300px;
-    border: 1px solid #ccc;
-    margin-top: 10px;
+  #scannerContainer { 
+    width: 100%; 
+    max-width: 400px; 
+    height: 300px; 
+    border: 1px solid #ccc; 
+    margin-top: 10px; 
     position: relative;
-    background: #000;
-    overflow: hidden;
-  }
-  #scannerVideo {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-  }
-  .scan-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    border: 2px solid #0f0;
-    box-sizing: border-box;
-    display: none;
   }
 </style>
 </head>
@@ -61,21 +42,19 @@
 <h3>Сканирование камеры</h3>
 <button id="startScan">Начать сканирование</button>
 <button id="stopScan" disabled>Остановить сканирование</button>
-<div id="scannerContainer">
-  <video id="scannerVideo" autoplay playsinline muted></video>
-  <div class="scan-overlay" id="scanOverlay"></div>
-</div>
+<div id="scannerContainer"></div>
 
-<!-- Подключаем ZXing -->
-<script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.1/umd/zxing-browser.min.js"></script>
+<!-- Правильная библиотека для работы с камерой -->
+<script src="https://unpkg.com/@zxing/browser@0.1.1/umd/zxing-browser.min.js"></script>
 <script>
 let items = [];
 let lastScanned = null;
 
-// --- ОСТАЛЬНАЯ ЛОГИКА БЕЗ ИЗМЕНЕНИЙ ---
+// --- ВСЯ ОСТАЛЬНАЯ ЛОГИКА БЕЗ ИЗМЕНЕНИЙ ---
 function saveItems() {
   localStorage.setItem('inventoryItems', JSON.stringify(items));
 }
+
 function loadItems() {
   const saved = localStorage.getItem('inventoryItems');
   if (saved) {
@@ -87,6 +66,7 @@ function loadItems() {
     }
   }
 }
+
 function refreshTable() {
   const tbody = document.getElementById('itemsTableBody');
   tbody.innerHTML = '';
@@ -121,6 +101,7 @@ function refreshTable() {
     });
   });
 }
+
 function addOrIncreaseItem(code, qty = 1) {
   if (!code) return;
   let existing = items.find(item => item.code === code);
@@ -178,15 +159,18 @@ async function sendOverBluetooth() {
       acceptAllDevices: true,
       optionalServices: ['00001101-0000-1000-8000-00805f9b34fb']
     });
+
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
     const characteristic = await service.getCharacteristic('00001101-0000-1000-8000-00805f9b34fb');
+
     let csvContent = '';
     items.forEach(i => {
       csvContent += `${i.code}h${i.qty}\n`;
     });
     const encoder = new TextEncoder();
     const data = encoder.encode(csvContent);
+
     await characteristic.writeValue(data);
     alert('Данные отправлены по Bluetooth!');
   } catch (error) {
@@ -194,90 +178,44 @@ async function sendOverBluetooth() {
     alert('Ошибка Bluetooth: ' + error);
   }
 }
+
 document.getElementById('sendBluetoothBtn').addEventListener('click', sendOverBluetooth);
 
-// ============ ГАРАНТИРОВАННОЕ СКАНИРОВАНИЕ С ВИДЕО ЭЛЕМЕНТОМ ============
+// ============ ZXING СКАНИРОВАНИЕ (ИСПРАВЛЕНО) ============
 let codeReader = null;
-let videoStream = null;
 const startScanBtn = document.getElementById('startScan');
 const stopScanBtn = document.getElementById('stopScan');
 const scannerContainer = document.getElementById('scannerContainer');
-const scannerVideo = document.getElementById('scannerVideo');
-const scanOverlay = document.getElementById('scanOverlay');
 
-function isValidEAN13(code) {
-  if (!/^\d{13}$/.test(code)) return false;
-  let sum = 0;
-  for (let i = 0; i < 12; i++) {
-    sum += parseInt(code[i]) * (i % 2 === 0 ? 1 : 3);
-  }
-  const checkDigit = (10 - (sum % 10)) % 10;
-  return checkDigit === parseInt(code[12]);
-}
+startScanBtn.addEventListener('click', () => {
+  // Создаём ридер из ZXing Browser
+  codeReader = new ZXing.BrowserMultiFormatReader();
 
-startScanBtn.addEventListener('click', async () => {
-  // Очищаем предыдущее состояние
-  if (codeReader) {
-    codeReader.reset();
-    codeReader = null;
-  }
-  if (videoStream) {
-    videoStream.getTracks().forEach(track => track.stop());
-    videoStream = null;
-  }
-
-  try {
-    // Запрашиваем доступ к камере
-  videoStream = await navigator.mediaDevices.getUserMedia({
-  video: {
-    facingMode: "environment", // ❌ Блокируется на MIUI в подкаталогах
-    width: { ideal: 1280 },
-    height: { ideal: 720 }
-  }
-});
-
-    // Привязываем поток к видео
-    scannerVideo.srcObject = videoStream;
-    scannerVideo.play();
-
-    // Создаём ридер
-    codeReader = new ZXing.BrowserMultiFormatReader();
-
-    // Настройки для лучшего распознавания EAN-13
-    const hints = new Map();
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13]);
-
-    // Запускаем сканирование с явным указанием видео
-    codeReader.decodeFromVideoElement(scannerVideo, (result, err) => {
-      if (result) {
-        let code = result.getText().trim().replace(/\D/g, '');
-        if (code.length === 13 && isValidEAN13(code)) {
-          addOrIncreaseItem(code, 1);
-          // Показываем зелёную рамку на 1 сек
-          scanOverlay.style.display = 'block';
-          setTimeout(() => {
-            scanOverlay.style.display = 'none';
-          }, 1000);
-          // Останавливаем сканирование
-          codeReader.reset();
-          startScanBtn.disabled = false;
-          stopScanBtn.disabled = true;
-        }
+  // Запускаем сканирование
+  codeReader.decodeFromVideoDevice(undefined, 'scannerContainer', (result, err) => {
+    if (result) {
+      const code = result.getText().trim();
+      if (code) {
+        addOrIncreaseItem(code, 1);
+        // Останавливаем после успешного скана
+        codeReader.reset();
+        startScanBtn.disabled = false;
+        stopScanBtn.disabled = true;
       }
-      if (err && !(err instanceof ZXing.NotFoundException)) {
-        console.error('Ошибка сканирования:', err);
-      }
-    }, hints);
+    }
 
+    if (err && !(err instanceof ZXing.NotFoundException)) {
+      console.error('Ошибка сканирования:', err);
+    }
+  })
+  .then(() => {
     startScanBtn.disabled = true;
     stopScanBtn.disabled = false;
-
-  } catch (err) {
-    console.error('Ошибка доступа к камере:', err);
-    alert('Не удалось получить доступ к камере. Разрешите доступ и обновите страницу.');
-    scannerVideo.srcObject = null;
-  }
+  })
+  .catch(err => {
+    console.error('Не удалось запустить камеру:', err);
+    alert('Ошибка камеры: ' + (err.message || 'проверьте разрешения и откройте по HTTPS'));
+  });
 });
 
 stopScanBtn.addEventListener('click', () => {
@@ -285,12 +223,6 @@ stopScanBtn.addEventListener('click', () => {
     codeReader.reset();
     codeReader = null;
   }
-  if (videoStream) {
-    videoStream.getTracks().forEach(track => track.stop());
-    videoStream = null;
-  }
-  scannerVideo.srcObject = null;
-  scanOverlay.style.display = 'none';
   startScanBtn.disabled = false;
   stopScanBtn.disabled = true;
 });
